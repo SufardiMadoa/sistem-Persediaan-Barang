@@ -2,6 +2,7 @@
 require 'function.php';
 
 // Fetch pemasok data
+// Fetch pemasok data
 $pemasokQuery = "SELECT id_pemasok, nama_pemasok FROM pemasok";
 $pemasokResult = mysqli_query($conn, $pemasokQuery);
 
@@ -29,13 +30,20 @@ if (isset($_POST['simpan'])) {
         // Proceed with insertion into pembelian table
         $insertPembelian = "INSERT INTO pembelian (kode_pembelian, tgl_pembelian, id_pemasok, total_pembelian, kode_barang, harga_beli) VALUES (?, ?, ?, ?, ?, ?)";
         $stmt = mysqli_prepare($conn, $insertPembelian);
-        mysqli_stmt_bind_param($stmt, "ssssss", $kode_pembelian, $tgl_pembelian, $id_pemasok, $total, $barang, $harga);
+        mysqli_stmt_bind_param($stmt, "ssssss", $kode_pembelian, $tgl_pembelian, $id_pemasok, $total_pembelian[0], $kode_barang[0], $harga_beli[0]);
+        mysqli_stmt_execute($stmt);
+
+        // Insert into detail_pembelian table
+        $insertDetail = "INSERT INTO detail_pembelian (kode_det_pembelian, kode_pembelian, kode_barang, jumlah_pembelian, harga_pembelian) VALUES (?, ?, ?, ?, ?)";
+        $stmtDetail = mysqli_prepare($conn, $insertDetail);
+        mysqli_stmt_bind_param($stmtDetail, "sssii", $kode_det_pembelian, $kode_pembelian, $kode_barang_item, $jumlah_pembelian_item, $harga_pembelian_item);
 
         for ($i = 0; $i < count($total_pembelian); $i++) {
-            $total = $total_pembelian[$i];
-            $barang = $kode_barang[$i];
-            $harga = $harga_beli[$i];
-            mysqli_stmt_execute($stmt);
+            $kode_det_pembelian = $kode_pembelian . '-' . ($i + 1);
+            $jumlah_pembelian_item = $total_pembelian[$i];
+            $kode_barang_item = $kode_barang[$i];
+            $harga_pembelian_item = $harga_beli[$i];
+            mysqli_stmt_execute($stmtDetail);
         }
 
         // Display success message or redirect to another page
@@ -54,9 +62,10 @@ if (isset($_POST['simpan'])) {
 $startDate = isset($_GET['start_date']) ? $_GET['start_date'] : '1970-01-01';
 $endDate = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
 $pembelianQuery = "
-    SELECT p.kode_pembelian, p.tgl_pembelian, p.id_pemasok, p.total_pembelian, b.nama_barang, p.harga_beli
+    SELECT p.kode_pembelian, p.tgl_pembelian, p.id_pemasok, p.total_pembelian, b.nama_barang, d.harga_pembelian
     FROM pembelian p
-    JOIN barang b ON p.kode_barang = b.kode_barang
+    JOIN detail_pembelian d ON p.kode_pembelian = d.kode_pembelian
+    JOIN barang b ON d.kode_barang = b.kode_barang
     WHERE p.tgl_pembelian BETWEEN ? AND ?
 ";
 $stmt = mysqli_prepare($conn, $pembelianQuery);
@@ -169,8 +178,8 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                                         <td><?= $row['tgl_pembelian'] ?></td>
                                         <td><?= $row['id_pemasok'] ?></td>
                                         <td><?= $row['total_pembelian'] ?></td>
-                                        <td><?= $row['nama_barang'] ?></td> <!-- Tampilkan nama barang -->
-                                        <td><?= $row['harga_beli'] ?></td>
+                                        <td><?= $row['nama_barang'] ?></td>
+                                        <td><?= $row['harga_pembelian'] ?></td>
                                     </tr>
                                 <?php } ?>
                                 </tbody>
@@ -257,7 +266,7 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                                             <?php } ?>
                                         </select>
                                     </td>
-                                    <td><input type="text" name="harga_beli[]" class="form-control" pattern="\d*" required></td>
+                                    <td><input type="text" name="harga_beli[]" class="form-control"  required></td>
                                     <td><button type="button" class="btn btn-danger remove-row">Hapus</button></td>
                                 </tr>
                             </tbody>
@@ -287,7 +296,7 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                     <?php } ?>
                 </select>
             </td>
-            <td><input type="text" name="harga_beli[]" class="form-control" pattern="\d*" required></td>
+             <td><input type="text" name="harga_beli[]" class="form-control"  required></td>
             <td><button type="button" class="btn btn-danger remove-row">Hapus</button></td>
         `;
     });

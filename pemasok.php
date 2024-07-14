@@ -123,7 +123,7 @@ $result = mysqli_query($conn, $sql);
                                 <!-- Table data -->
                             </div>
                             <div class="text-end mt-3">
-                                <button type="button" class="btn btn-success" onclick="cetakLaporan()">Cetak</button>
+                                <button type="button" class="btn btn-success" onclick="print()">Cetak</button>
                             </div>
                         </div>
                     </div>

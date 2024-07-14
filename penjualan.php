@@ -2,7 +2,62 @@
 require 'function.php';
 $query = "SELECT * FROM penjualan";
 $result = $conn->query($query);
+$query = "SELECT p.kode_penjualan, p.tgl_penjualan, p.total_penjualan, dp.kode_barang, b.nama_barang, dp.harga_penjualan, dp.jumlah_penjualan 
+          FROM penjualan p
+          JOIN detail_penjualan dp ON p.kode_penjualan = dp.kode_penjualan
+          JOIN barang b ON dp.kode_barang = b.kode_barang";
+$result = $conn->query($query); 
+
+$barangQuery = "SELECT kode_barang, harga_beli, nama_barang FROM barang";
+$barangResult = mysqli_query($conn, $barangQuery);
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
+    $kode_penjualan = $_POST['kode_penjualan'];
+    $tgl_penjualan = $_POST['tgl_penjualan'];
+    $total_penjualan = $_POST['total_penjualan'];
+    
+    $kode_barang = isset($_POST['kode_barang']) ? $_POST['kode_barang'] : [];
+    $harga_jual = isset($_POST['harga_jual']) ? $_POST['harga_jual'] : [];
+    $jumlah_penjualan = isset($_POST['jumlah_penjualan']) ? $_POST['jumlah_penjualan'] : [];
+    $total_bayar = isset($_POST['total_bayar']) ? $_POST['total_bayar'] : [];
+
+    $total_bayar = !empty($total_bayar) ? array_sum($total_bayar) : 0; // Calculate total bayar for all items
+
+    // Begin transaction
+    $conn->begin_transaction();
+
+    try {
+        // Insert into penjualan table
+        $query_penjualan = "INSERT INTO penjualan (kode_penjualan, tgl_penjualan, total_penjualan, total_bayar) VALUES (?, ?, ?, ?)";
+        $stmt_penjualan = $conn->prepare($query_penjualan);
+        $stmt_penjualan->bind_param("ssss", $kode_penjualan, $tgl_penjualan, $total_penjualan, $total_bayar);
+        $stmt_penjualan->execute();
+
+        // Insert into detail_penjualan table
+        foreach ($kode_barang as $i => $kode) {
+            // Generate a unique kode_det_penjualan
+            $kode_det_penjualan = $kode_penjualan . '-' . ($i + 1);
+            $query_detail = "INSERT INTO detail_penjualan (kode_det_penjualan, kode_penjualan, kode_barang, jumlah_penjualan, harga_penjualan) VALUES (?, ?, ?, ?, ?)";
+            $stmt_detail = $conn->prepare($query_detail);
+            $jumlah = isset($jumlah_penjualan[$i]) ? $jumlah_penjualan[$i] : 0;
+            $stmt_detail->bind_param("sssss", $kode_det_penjualan, $kode_penjualan, $kode, $jumlah, $harga_jual[$i]);
+            $stmt_detail->execute();
+        }
+
+        // Commit transaction
+        $conn->commit();
+        
+        // Redirect or display success message
+        header("Location: penjualan.php?success=1");
+        exit();
+
+    } catch (mysqli_sql_exception $exception) {
+        $conn->rollback();
+        throw $exception;
+    }
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -97,18 +152,20 @@ $result = $conn->query($query);
                                     </tr>
                                 </thead>
                                 <tbody>
+                                <?php while ($row = $result->fetch_assoc()) { ?>
                                     <tr>
-                                        <td>Tiger Nixon</td>
-                                        <td>System Architect</td>
-                                        <td>Edinburgh</td>
-                                        <td>61</td>
-                                        <td>61</td>
-                                        <td>2011/04/25</td>
+                                        <td><?php echo $row['kode_penjualan']; ?></td>
+                                        <td><?php echo $row['tgl_penjualan']; ?></td>
+                                        <td><?php echo $row['total_penjualan']; ?></td>
+                                        <td><?php echo $row['nama_barang']; ?></td>
+                                        <td><?php echo $row['harga_penjualan']; ?></td>
+                                        <td><?php echo $row['total_penjualan'] * $row['harga_penjualan']; ?></td>
                                     </tr>
+                                    <?php } ?>
                                 </tbody>
                             </table>
                             <div class="text-end mt-3">
-                                <button type="button" class="btn btn-success" onclick="cetakLaporan()">Cetak</button>
+                                <button type="button" class="btn btn-success" onclick="print()">Cetak</button>
                             </div>
                         </div>
                     </div>
@@ -143,15 +200,15 @@ $result = $conn->query($query);
                 <form method="post">
                     <div class="mb-3">
                         <label for="kode_pembelian" class="form-label">Kode Penjualan</label>
-                        <input type="text" class="form-control" id="kode_pembelian" name="kode_pembelian" required>
+                        <input type="text" class="form-control" id="kode_pembelian" name="kode_penjualan" required>
                     </div>
                     <div class="mb-3">
                         <label for="tgl_pembelian" class="form-label">Tanggal Penjualan</label>
-                        <input type="date" class="form-control" id="tgl_pembelian" name="tgl_pembelian" required>
+                        <input type="date" class="form-control" id="tgl_pembelian" name="tgl_penjualan" required>
                     </div>
                     <div class="mb-3">
                         <label for="id_pemasok" class="form-label">Total Penjualan</label>
-                        <input type="text" class="form-control" id="id_pemasok" name="id_pemasok" required>
+                        <input type="text" class="form-control" id="id_pemasok" name="total_penjualan" required>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-bordered">
@@ -165,9 +222,17 @@ $result = $conn->query($query);
                             </thead>
                             <tbody id="itemRows">
                                 <tr>
-                                    <td><input type="text" name="nama_barang[]" class="form-control" required></td>
+                                    <td>
+                                        <select name="kode_barang[]" class="form-select" required>
+                                            <option value="">Pilih Barang</option>
+                                            <?php mysqli_data_seek($barangResult, 0); // reset cursor ?>
+                                            <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
+                                                <option value="<?= $row['kode_barang'] ?>"><?= $row['nama_barang'] ?></option>
+                                            <?php } ?>
+                                        </select>
+                                    </td>
                                     <td><input type="number" name="harga_jual[]" class="form-control" required></td>
-                                    <td><input type="text" name="total_bayar[]" class="form-control" required></td>
+                                    <td><input type="text" name="total_bayar[]" class="form-control total-bayar" readonly required></td>
                                     <td><button type="button" class="btn btn-danger remove-row">Hapus</button></td>
                                 </tr>
                             </tbody>
@@ -183,13 +248,35 @@ $result = $conn->query($query);
     </div>
 </div>
 <script>
+   function calculateTotalBayar(row) {
+            const hargaJual = parseFloat(row.querySelector('.harga-jual').value) || 0;
+            const jumlahPenjualan = parseFloat(row.querySelector('.jumlah-penjualan').value) || 0;
+            const totalBayar = row.querySelector('.total-bayar');
+            totalBayar.value = hargaJual * jumlahPenjualan;
+        }
+
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('harga-jual') || e.target.classList.contains('jumlah-penjualan')) {
+                const row = e.target.closest('tr');
+                calculateTotalBayar(row);
+            }
+        });
+
     document.getElementById('addRow').addEventListener('click', function () {
         var table = document.getElementById('itemRows');
         var row = table.insertRow();
         row.innerHTML = `
-            <td><input type="text" name="nama_barang[]" class="form-control" required></td>
+            <td>
+                <select name="kode_barang[]" class="form-select" required>
+                    <option value="">Pilih Barang</option>
+                    <?php mysqli_data_seek($barangResult, 0); // reset cursor ?>
+                    <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
+                        <option value="<?= $row['kode_barang'] ?>"><?= $row['nama_barang'] ?></option>
+                    <?php } ?>
+                </select>
+            </td>
             <td><input type="number" name="harga_jual[]" class="form-control" required></td>
-            <td><input type="text" name="total_bayar[]" class="form-control" required></td>
+            <td><input type="text" name="total_bayar[]" class="form-control total-bayar" readonly required></td>
             <td><button type="button" class="btn btn-danger remove-row">Hapus</button></td>
         `;
     });
