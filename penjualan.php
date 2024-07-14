@@ -14,11 +14,15 @@ $barangResult = mysqli_query($conn, $barangQuery);
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
     $kode_penjualan = $_POST['kode_penjualan'];
     $tgl_penjualan = $_POST['tgl_penjualan'];
-    $total_penjualan = $_POST['total_penjualan'];
-    
+
     $kode_barang = isset($_POST['kode_barang']) ? $_POST['kode_barang'] : [];
+    $total_rows = count($kode_barang);
+    $total = $_POST['total_penjualan'];
+    $total_penjualan = $total * $total_rows;
+    
+    
     $harga_jual = isset($_POST['harga_jual']) ? $_POST['harga_jual'] : [];
-    $jumlah_penjualan = isset($_POST['jumlah_penjualan']) ? $_POST['jumlah_penjualan'] : [];
+    // $jumlah_penjualan = isset($_POST['total_penjualan']) ? $_POST['total_penjualan'] : [];
     $total_bayar = isset($_POST['total_bayar']) ? $_POST['total_bayar'] : [];
 
     $total_bayar = !empty($total_bayar) ? array_sum($total_bayar) : 0; // Calculate total bayar for all items
@@ -27,36 +31,76 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
     $conn->begin_transaction();
 
     try {
+        foreach ($kode_barang as $i => $kode) {
+            $check_stock_query = "SELECT jumlah_barang FROM barang WHERE kode_barang = ?";
+            $stmt_check_stock = $conn->prepare($check_stock_query);
+            $stmt_check_stock->bind_param("s", $kode);
+            $stmt_check_stock->execute();
+            $stmt_check_stock->bind_result($stok_barang);
+            $stmt_check_stock->fetch();
+    
+            if ($stok_barang < $total) {
+                // Stock is insufficient, display alert and prevent sale
+                echo "<script>alert('Stock barang {$kode} tidak mencukupi untuk penjualan ini');</script>";
+                $stmt_check_stock->free_result(); // Free result set
+                $conn->rollback(); // Rollback transaction
+                exit(); // or redirect to prevent further processing
+            }
+    
+            $stmt_check_stock->free_result(); // Free result set after each iteration
+        }
+    
         // Insert into penjualan table
         $query_penjualan = "INSERT INTO penjualan (kode_penjualan, tgl_penjualan, total_penjualan, total_bayar) VALUES (?, ?, ?, ?)";
         $stmt_penjualan = $conn->prepare($query_penjualan);
         $stmt_penjualan->bind_param("ssss", $kode_penjualan, $tgl_penjualan, $total_penjualan, $total_bayar);
         $stmt_penjualan->execute();
-
+    
         // Insert into detail_penjualan table
         foreach ($kode_barang as $i => $kode) {
             // Generate a unique kode_det_penjualan
             $kode_det_penjualan = $kode_penjualan . '-' . ($i + 1);
+            $jumlah = $total;
+            $harga = isset($harga_jual[$i]) ? $harga_jual[$i] : 0;
             $query_detail = "INSERT INTO detail_penjualan (kode_det_penjualan, kode_penjualan, kode_barang, jumlah_penjualan, harga_penjualan) VALUES (?, ?, ?, ?, ?)";
             $stmt_detail = $conn->prepare($query_detail);
-            $jumlah = isset($jumlah_penjualan[$i]) ? $jumlah_penjualan[$i] : 0;
-            $stmt_detail->bind_param("sssss", $kode_det_penjualan, $kode_penjualan, $kode, $jumlah, $harga_jual[$i]);
+            $stmt_detail->bind_param("sssii", $kode_det_penjualan, $kode_penjualan, $kode, $jumlah, $harga);
             $stmt_detail->execute();
-        }
 
+            $update_stock_query = "UPDATE barang SET jumlah_barang = jumlah_barang - ? WHERE kode_barang = ?";
+            $stmt_update_stock = $conn->prepare($update_stock_query);
+            $stmt_update_stock->bind_param("is", $jumlah, $kode);
+            $stmt_update_stock->execute();
+        }
+    
         // Commit transaction
         $conn->commit();
         
         // Redirect or display success message
         header("Location: penjualan.php?success=1");
         exit();
-
+    
     } catch (mysqli_sql_exception $exception) {
         $conn->rollback();
         throw $exception;
     }
 }
+// Fetch pembelian data for the table
+$startDate = isset($_GET['start_date']) ? $_GET['start_date'] : '1970-01-01';
+$endDate = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
+$pembelianQuery = "
+    SELECT p.kode_pembelian, p.tgl_pembelian, p.id_pemasok, p.total_pembelian, b.nama_barang, d.harga_pembelian
+    FROM pembelian p
+    JOIN detail_pembelian d ON p.kode_pembelian = d.kode_pembelian
+    JOIN barang b ON d.kode_barang = b.kode_barang
+    WHERE p.tgl_pembelian BETWEEN ? AND ?
+";
+$stmt = mysqli_prepare($conn, $pembelianQuery);
+mysqli_stmt_bind_param($stmt, "ss", $startDate, $endDate);
+mysqli_stmt_execute($stmt);
+$pembelianResult = mysqli_stmt_get_result($stmt);
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -101,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Data Penjualan
                         </a>
-                        <a class="nav-link" href="index.html">
+                        <a class="nav-link" href="persediaan.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Persediaan
                         </a>
@@ -156,10 +200,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
                                     <tr>
                                         <td><?php echo $row['kode_penjualan']; ?></td>
                                         <td><?php echo $row['tgl_penjualan']; ?></td>
-                                        <td><?php echo $row['total_penjualan']; ?></td>
+                                        <td><?php echo $row['jumlah_penjualan']; ?></td>
                                         <td><?php echo $row['nama_barang']; ?></td>
                                         <td><?php echo $row['harga_penjualan']; ?></td>
-                                        <td><?php echo $row['total_penjualan'] * $row['harga_penjualan']; ?></td>
+                                        <td><?php echo $row['jumlah_penjualan'] * $row['harga_penjualan']; ?></td>
                                     </tr>
                                     <?php } ?>
                                 </tbody>

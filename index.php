@@ -45,7 +45,7 @@ require 'function.php';
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Data Penjualan
                         </a>
-                        <a class="nav-link" href="#">
+                        <a class="nav-link" href="persediaan.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Persediaan
                         </a>

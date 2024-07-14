@@ -37,13 +37,22 @@ if (isset($_POST['simpan'])) {
         $insertDetail = "INSERT INTO detail_pembelian (kode_det_pembelian, kode_pembelian, kode_barang, jumlah_pembelian, harga_pembelian) VALUES (?, ?, ?, ?, ?)";
         $stmtDetail = mysqli_prepare($conn, $insertDetail);
         mysqli_stmt_bind_param($stmtDetail, "sssii", $kode_det_pembelian, $kode_pembelian, $kode_barang_item, $jumlah_pembelian_item, $harga_pembelian_item);
-
+        
+        $updateStokQuery = "UPDATE barang SET jumlah_barang = jumlah_barang + ? WHERE kode_barang = ?";
+        $stmtUpdateStok = mysqli_prepare($conn, $updateStokQuery);
+        mysqli_stmt_bind_param($stmtUpdateStok, "is", $jumlah_pembelian_item, $kode_barang_item);
+        
         for ($i = 0; $i < count($total_pembelian); $i++) {
             $kode_det_pembelian = $kode_pembelian . '-' . ($i + 1);
             $jumlah_pembelian_item = $total_pembelian[$i];
             $kode_barang_item = $kode_barang[$i];
             $harga_pembelian_item = $harga_beli[$i];
+            
             mysqli_stmt_execute($stmtDetail);
+            
+            // Update stok barang
+            mysqli_stmt_bind_param($stmtUpdateStok, "is", $jumlah_pembelian_item, $kode_barang_item);
+            mysqli_stmt_execute($stmtUpdateStok);
         }
 
         // Display success message or redirect to another page
@@ -118,7 +127,7 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Data Penjualan
                         </a>
-                        <a class="nav-link" href="#">
+                        <a class="nav-link" href="persediaan.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Persediaan
                         </a>
