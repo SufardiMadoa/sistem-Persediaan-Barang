@@ -67,10 +67,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
             $stmt_detail->bind_param("sssii", $kode_det_penjualan, $kode_penjualan, $kode, $jumlah, $harga);
             $stmt_detail->execute();
 
+
+            
+
             $update_stock_query = "UPDATE barang SET jumlah_barang = jumlah_barang - ? WHERE kode_barang = ?";
             $stmt_update_stock = $conn->prepare($update_stock_query);
             $stmt_update_stock->bind_param("is", $jumlah, $kode);
             $stmt_update_stock->execute();
+        }
+     
+        foreach ($kode_barang as $i => $kode) {
+            // Generate a unique kode_det_penjualan
+            $kode_det_penjualan = $kode_penjualan . '-' . ($i + 1);
+            $jumlah = $total;
+            $harga = isset($harga_jual[$i]) ? $harga_jual[$i] : 0;
+            
+            $total_keluar = $jumlah * $harga; // Hitung total keluar
+            
+            // Insert into kartu_persediaan table
+            $query_kartu = "
+                INSERT INTO kartu_persediaan (kode_persediaan, tanggal_persediaan, kode_det_penjualan, unit_keluar, harga_keluar, total_keluar)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ";
+            $stmt_kartu = $conn->prepare($query_kartu);
+            $stmt_kartu->bind_param("sssssi", $kode_det_penjualan, $tgl_penjualan, $kode_det_penjualan, $jumlah, $harga, $total_keluar);
+            $stmt_kartu->execute();
         }
     
         // Commit transaction
@@ -113,6 +134,7 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
     <title>Admin - Gusniar Kayu</title>
     <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
     <link href="css/styles.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
 </head>
 <body class="sb-nav-fixed">
@@ -251,9 +273,9 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                         <input type="date" class="form-control" id="tgl_pembelian" name="tgl_penjualan" required>
                     </div>
                     <div class="mb-3">
-                        <label for="id_pemasok" class="form-label">Total Penjualan</label>
-                        <input type="text" class="form-control" id="id_pemasok" name="total_penjualan" required>
-                    </div>
+                    <label for="jumlah_penjualan_1" class="form-label">Total Penjualan</label>
+                    <input type="number" class="form-control" oninput="calculateTotalBayar(this)" id="jumlah_penjualan_1" name="total_penjualan">
+</div>
                     <div class="table-responsive">
                         <table class="table table-bordered">
                             <thead>
@@ -265,21 +287,20 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                                 </tr>
                             </thead>
                             <tbody id="itemRows">
-                            <tr>
-                                                    <td>
-                                                        <select name="kode_barang[]" class="form-select" required>
-                                                            <option value="">Pilih Barang</option>
-                                                            <?php mysqli_data_seek($barangResult, 0); // reset cursor ?>
-                                                            <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
-                                                                <option value="<?= $row['kode_barang'] ?>"><?= $row['nama_barang'] ?></option>
-                                                            <?php } ?>
-                                                        </select>
-                                                    </td>
-                                                    <td><input type="number" name="harga_jual[]" class="form-control harga-jual" required></td>
-                                                    <td><input type="text" name="total_bayar[]" class="form-control total-bayar" readonly required></td>
-                                                    <td><button type="button" class="btn btn-danger remove-row">Hapus</button></td>
-                                                </tr>
-                            </tbody>
+    <tr>
+        <td>
+            <select class="form-control" name="kode_barang[]" onchange="updateHargaJual(this)" required>
+                <option value="">Pilih Barang</option>
+                <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
+                    <option value="<?php echo $row['kode_barang']; ?>" data-harga_jual="<?php echo $row['harga_jual']; ?>"><?php echo $row['nama_barang']; ?></option>
+                <?php } ?>
+            </select>
+        </td>
+        <td><input type="number" name="harga_jual[]" class="form-control" readonly></td>
+        <td><input type="number" name="total_bayar[]" class="form-control" readonly></td>
+        <td><button type="button" class="btn btn-success" onclick="removeRow(this)">Hapus</button></td>
+    </tr>
+</tbody>
                         </table>
                         <button type="button" class="btn btn-success" id="addRow">Tambah Baris</button>
                     </div>
@@ -292,70 +313,66 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
     </div>
 </div>
 <script>
-   function calculateTotalBayar(row) {
-            const hargaJual = parseFloat(row.querySelector('.harga-jual').value) || 0;
-            const jumlahPenjualan = parseFloat(row.querySelector('.jumlah-penjualan').value) || 0;
-            const totalBayar = row.querySelector('.total-bayar');
-            totalBayar.value = hargaJual * jumlahPenjualan;
-        }
+// Fungsi untuk mengupdate harga jual pada perubahan pilihan barang
+function updateHargaJual(selectElement) {
+    var hargaJualInput = selectElement.parentNode.parentNode.cells[1].querySelector('input');
+    var selectedOption = selectElement.options[selectElement.selectedIndex];
+    var hargaJual = selectedOption.getAttribute('data-harga_jual');
+    hargaJualInput.value = hargaJual;
+}
 
-        // document.addEventListener('input', function(e) {
-        //     if (e.target.classList.contains('harga-jual') || e.target.classList.contains('jumlah-penjualan')) {
-        //         const row = e.target.closest('tr');
-        //         calculateTotalBayar(row);
-        //     }
-        // });
-        document.addEventListener('input', function(e) {
-            if (e.target.classList.contains('harga-jual') || e.target.classList.contains('jumlah-penjualan')) {
-                const row = e.target.closest('tr');
-                calculateTotalBayar(row);
-                const totalPenjualanInput = document.getElementById('total_penjualan');
-                const totalBayarInputs = document.querySelectorAll('.total-bayar');
-                let totalPenjualan = 0;
-                totalBayarInputs.forEach(input => {
-                    totalPenjualan += parseFloat(input.value);
-                });
-                totalPenjualanInput.value = totalPenjualan;
-            }
-        });
+// Fungsi untuk menghitung total bayar berdasarkan harga jual dan jumlah penjualan
+function calculateTotalBayar(inputElement) {
+    var row = inputElement.closest('tr');
+    var hargaJual = parseFloat(row.querySelector('select[name="kode_barang[]"]').selectedOptions[0].getAttribute('data-harga_jual'));
+    var jumlahPenjualan = parseFloat(row.querySelector('input[name="jumlah_penjualan[]"]').value) || 0;
+    var totalBayar = hargaJual * jumlahPenjualan;
+    row.querySelector('input[name="total_bayar[]"]').value = totalBayar.toFixed(2);
+    calculateTotalPenjualan(); // Hitung kembali total penjualan setelah mengubah jumlah penjualan
+}
 
-        document.addEventListener('click', function(e) {
-            if (e.target && e.target.classList.contains('remove-row')) {
-                e.target.closest('tr').remove();
-                const totalPenjualanInput = document.getElementById('total_penjualan');
-                const totalBayarInputs = document.querySelectorAll('.total-bayar');
-                let totalPenjualan = 0;
-                totalBayarInputs.forEach(input => {
-                    totalPenjualan += parseFloat(input.value);
-                });
-                totalPenjualanInput.value = totalPenjualan;
-            }
-        });
+// Fungsi untuk menghapus baris
+function removeRow(buttonElement) {
+    buttonElement.closest('tr').remove();
+    calculateTotalPenjualan(); // Hitung kembali total penjualan setelah menghapus baris
+}
 
-
-    document.getElementById('addRow').addEventListener('click', function () {
-        var table = document.getElementById('itemRows');
-        var row = table.insertRow();
-        row.innerHTML = `
-            <td>
-                <select name="kode_barang[]" class="form-select" required>
-                    <option value="">Pilih Barang</option>
-                    <?php mysqli_data_seek($barangResult, 0); // reset cursor ?>
-                    <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
-                        <option value="<?= $row['kode_barang'] ?>"><?= $row['nama_barang'] ?></option>
-                    <?php } ?>
-                </select>
-            </td>
-            <td><input type="number" name="harga_jual[]" class="form-control" required></td>
-            <td><input type="text" name="total_bayar[]" class="form-control total-bayar" readonly required></td>
-            <td><button type="button" class="btn btn-danger remove-row">Hapus</button></td>
-        `;
+// Fungsi untuk menghitung total penjualan dari semua baris
+function calculateTotalPenjualan() {
+    var totalPenjualan = 0;
+    $('input[name="total_bayar[]"]').each(function() {
+        totalPenjualan += parseFloat($(this).val()) || 0;
     });
+    $('#jumlah_penjualan_1').val(totalPenjualan.toFixed(2)); // Menetapkan nilai total_penjualan dengan 2 angka desimal
+}
 
-    document.addEventListener('click', function (e) {
-        if (e.target && e.target.classList.contains('remove-row')) {
-            e.target.closest('tr').remove();
-        }
-    });
+// Event listener untuk input jumlah penjualan
+$(document).on('input', 'input[name="jumlah_penjualan[]"]', function() {
+    calculateTotalBayar(this); // Panggil fungsi calculateTotalBayar saat nilai input berubah
+});
+
+// Fungsi untuk menambahkan baris baru pada tabel
+document.getElementById('addRow').addEventListener('click', function() {
+    var table = document.getElementById('itemRows');
+    var row = table.insertRow();
+    row.innerHTML = `
+        <td>
+            <select class="form-control" name="kode_barang[]" onchange="updateHargaJual(this)" required>
+                <option value="">Pilih Barang</option>
+                <?php mysqli_data_seek($barangResult, 0); ?>
+                <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
+                    <option value="<?php echo $row['kode_barang']; ?>" data-harga_jual="<?php echo $row['harga_jual']; ?>"><?php echo $row['nama_barang']; ?></option>
+                <?php } ?>
+            </select>
+        </td>
+        <td><input type="number" name="harga_jual[]" class="form-control" readonly></td>
+        <td><input type="number" name="total_bayar[]" class="form-control" readonly></td>
+        <td><button type="button" class="btn btn-danger" onclick="removeRow(this)">Hapus</button></td>
+    `;
+    // Memanggil fungsi untuk mengupdate harga jual pada baris baru
+    updateHargaJual(row.querySelector('select'));
+});
+
 </script>
+
 </html>

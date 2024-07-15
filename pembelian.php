@@ -1,3 +1,6 @@
+
+
+
 <?php
 require 'function.php';
 
@@ -6,7 +9,7 @@ $pemasokQuery = "SELECT id_pemasok, nama_pemasok FROM pemasok";
 $pemasokResult = mysqli_query($conn, $pemasokQuery);
 
 // Fetch barang data
-$barangQuery = "SELECT kode_barang, harga_beli, nama_barang FROM barang";
+$barangQuery = "SELECT * FROM barang";
 $barangResult = mysqli_query($conn, $barangQuery);
 
 // Handle form submission
@@ -29,106 +32,85 @@ if (isset($_POST['simpan'])) {
         // Proceed with insertion into pembelian table
         $insertPembelian = "INSERT INTO pembelian (kode_pembelian, tgl_pembelian, id_pemasok, total_pembelian, kode_barang, harga_beli) VALUES (?, ?, ?, ?, ?, ?)";
         $stmt = mysqli_prepare($conn, $insertPembelian);
-        mysqli_stmt_bind_param($stmt, "ssssss", $kode_pembelian, $tgl_pembelian, $id_pemasok, $total_pembelian[0], $kode_barang[0], $harga_beli[0]);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
-
-        // Insert into detail_pembelian table and update stock
-        $insertDetail = "INSERT INTO detail_pembelian (kode_det_pembelian, kode_pembelian, kode_barang, jumlah_pembelian, harga_pembelian) VALUES (?, ?, ?, ?, ?)";
-        $stmtDetail = mysqli_prepare($conn, $insertDetail);
-
-        $updateStokQuery = "UPDATE barang SET jumlah_barang = jumlah_barang + ? WHERE kode_barang = ?";
-        $stmtUpdateStok = mysqli_prepare($conn, $updateStokQuery);
-
-        $insertKartuPersediaan = "INSERT INTO kartu_persediaan 
-        (kode_persediaan, tanggal_persediaan, kode_det_pembelian, unit_masuk, harga_masuk, total_masuk, kode_det_penjualan, unit_keluar, harga_keluar, total_keluar, unit_persediaan, harga_persediaan, total_persediaan) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmtKartu = mysqli_prepare($conn, $insertKartuPersediaan);
 
         for ($i = 0; $i < count($total_pembelian); $i++) {
-            $kode_det_pembelian = $kode_pembelian . '-' . ($i + 1);
-            $jumlah_pembelian_item = $total_pembelian[$i];
             $kode_barang_item = $kode_barang[$i];
             $harga_pembelian_item = $harga_beli[$i];
-            
+            $total_pembelian_item = $total_pembelian[$i];
 
-            // Execute detail_pembelian insertion
-            mysqli_stmt_bind_param($stmtDetail, "sssii", $kode_det_pembelian, $kode_pembelian, $kode_barang_item, $jumlah_pembelian_item, $harga_pembelian_item);
+            // Execute pembelian insertion
+            mysqli_stmt_bind_param($stmt, "ssssss", $kode_pembelian, $tgl_pembelian, $id_pemasok, $total_pembelian_item, $kode_barang_item, $harga_pembelian_item);
+            mysqli_stmt_execute($stmt);
+
+            // Insert into detail_pembelian table
+            $kode_det_pembelian = $kode_pembelian . '-' . ($i + 1);
+            $insertDetail = "INSERT INTO detail_pembelian (kode_det_pembelian, kode_pembelian, kode_barang, jumlah_pembelian, harga_pembelian) VALUES (?, ?, ?, ?, ?)";
+            $stmtDetail = mysqli_prepare($conn, $insertDetail);
+            mysqli_stmt_bind_param($stmtDetail, "sssis", $kode_det_pembelian, $kode_pembelian, $kode_barang_item, $total_pembelian_item, $harga_pembelian_item);
             mysqli_stmt_execute($stmtDetail);
             mysqli_stmt_close($stmtDetail);
-            
 
-            // Execute stok barang update
-            mysqli_stmt_bind_param($stmtUpdateStok, "is", $jumlah_pembelian_item, $kode_barang_item);
-            mysqli_stmt_execute($stmtUpdateStok);
-            mysqli_stmt_close($stmtUpdateStok);
 
-            // Fetch unit_persediaan, harga_persediaan, total_persediaan from barang table
-            $fetchBarangQuery = "SELECT jumlah_barang, harga_beli, jumlah_barang  AS total FROM barang WHERE kode_barang = ?";
-            $stmtFetchBarang = mysqli_prepare($conn, $fetchBarangQuery);
-            mysqli_stmt_bind_param($stmtFetchBarang, "s", $kode_barang_item);
-            mysqli_stmt_execute($stmtFetchBarang);
-            mysqli_stmt_bind_result($stmtFetchBarang, $unit_persediaan, $harga_persediaan, $total_persediaan);
-            mysqli_stmt_fetch($stmtFetchBarang);
-            mysqli_stmt_close($stmtFetchBarang);
-
-            // Calculate total_masuk
-            $total_masuk = $jumlah_pembelian_item * $harga_pembelian_item;
-
-            // Execute kartu_persediaan insertion
-            $kode_persediaan = $kode_det_pembelian . '-' . ($i + 1); // kode_persediaan
-            $tanggal_persediaan = $tgl_pembelian; // tanggal_persediaan, bisa disesuaikan dengan kebutuhan
-            $unit_masuk = $jumlah_pembelian_item; // unit_masuk
-            $harga_masuk = $harga_pembelian_item; // harga_masuk
-            $total_masuk = $total_masuk; // total_masuk, sudah dihitung sebelumnya
-            $kode_det_penjualan = Null; // kode_det_penjualan, diinisialisasi dengan '0'
-            $unit_keluar = Null; // unit_keluar, diinisialisasi dengan '0'
-            $harga_keluar = Null; // harga_keluar, diinisialisasi dengan '0'
-            $total_keluar = Null; // total_keluar, diinisialisasi dengan '0'
-            $unit_persediaan = $unit_persediaan; // unit_persediaan, sudah diambil dari tabel barang
-            $harga_persediaan = $harga_persediaan; // harga_persediaan, sudah diambil dari tabel barang
-            $total_persediaan = $total_persediaan; // total_persediaan, sudah dihitung sebelumnya
-            
-            mysqli_stmt_bind_param($stmtKartu, "sssiidiiiiiii", 
-                $kode_persediaan, 
-                $tanggal_persediaan, 
-                $kode_det_pembelian, 
-                $unit_masuk, 
-                $harga_masuk, 
-                $total_masuk,
-                $kode_det_penjualan,
-                $unit_keluar,
-                $harga_keluar,
-                $total_keluar,
-                $unit_persediaan,
-                $harga_persediaan,
-                $total_persediaan
-            );
-            
+            $kode_persediaan = $kode_pembelian . '-K-' . ($i + 1);
+            $insertKartu = "INSERT INTO kartu_persediaan (kode_persediaan, tanggal_persediaan, kode_det_pembelian, unit_masuk, harga_masuk, total_masuk) VALUES (?, ?, ?, ?, ?, ?)";
+            $stmtKartu = mysqli_prepare($conn, $insertKartu);
+            $total_masuk = $total_pembelian_item * $harga_pembelian_item;
+            mysqli_stmt_bind_param($stmtKartu, "sssiii", $kode_persediaan, $tgl_pembelian, $kode_det_pembelian, $total_pembelian_item, $harga_pembelian_item, $total_masuk);
             mysqli_stmt_execute($stmtKartu);
+            mysqli_stmt_close($stmtKartu);
+            // Update stock barang
+            // $updateStokQuery = "UPDATE barang SET jumlah_barang = jumlah_barang + ? WHERE kode_barang = ?";
+            // $stmtUpdateStok = mysqli_prepare($conn, $updateStokQuery);
+            // mysqli_stmt_bind_param($stmtUpdateStok, "is", $total_pembelian_item, $kode_barang_item);
+            // mysqli_stmt_execute($stmtUpdateStok);
+            // mysqli_stmt_close($stmtUpdateStok);
+ // Fetch current data for the item from barang table
+ $fetchBarangQuery = "SELECT jumlah_barang, harga_beli FROM barang WHERE kode_barang = ?";
+ $stmtFetchBarang = mysqli_prepare($conn, $fetchBarangQuery);
+ mysqli_stmt_bind_param($stmtFetchBarang, "s", $kode_barang_item);
+ mysqli_stmt_execute($stmtFetchBarang);
+ $resultFetchBarang = mysqli_stmt_get_result($stmtFetchBarang);
+ $rowBarang = mysqli_fetch_assoc($resultFetchBarang);
+ mysqli_stmt_close($stmtFetchBarang);
 
-            // Tutup statement untuk pengambilan barang
-            
+ $current_jumlah_barang = $rowBarang['jumlah_barang'];
+ $current_harga_beli = $rowBarang['harga_beli'];
+
+ // Calculate new stock and average price
+ $jumlah_barang_baru = $current_jumlah_barang + $total_pembelian_item;
+ $modal_awal = $current_jumlah_barang * $current_harga_beli;
+ $modal_pembelian = $total_pembelian_item * $harga_pembelian_item;
+ $modal_awal_baru = $modal_awal + $modal_pembelian;
+ $harga_rata_rata_baru = $modal_awal_baru / $jumlah_barang_baru;
+
+ // Update barang table with new average price
+ $updateBarangQuery = "UPDATE barang SET jumlah_barang = ?, harga_beli = ?, harga_jual = ? WHERE kode_barang = ?";
+ $stmtUpdateBarang = mysqli_prepare($conn, $updateBarangQuery);
+ mysqli_stmt_bind_param($stmtUpdateBarang, "iiis", $jumlah_barang_baru, $harga_rata_rata_baru, $harga_rata_rata_baru, $kode_barang_item);
+ mysqli_stmt_execute($stmtUpdateBarang);
+ mysqli_stmt_close($stmtUpdateBarang);
+
+
+
+            // lakukan menghitung rata rata disini
+            // $totalbayar = $total_pembelian_item * $harga_pembelian_item;
+            // $modalawal = $modal+$totalbayar;
+            // $modaljual = "jumlah_barang" : $modalawal;
         }
 
-        // Tutup statement untuk kartu persediaan, detail pembelian, dan update stok
-        
+        // Close statement for pembelian
+        mysqli_stmt_close($stmt);
 
-        // Display success message or redirect to another page
+        // Display success message or redirect
         echo '<div class="alert alert-success" role="alert">Data pembelian berhasil dimasukkan!</div>';
-
-        // Alternatively, redirect to another page after successful insertion
-        // header('Location: success.php');
-        // exit;
     } else {
-        // Handle case where $id_pemasok does not exist in pemasok table
+        // Handle invalid pemasok ID
         echo '<div class="alert alert-danger" role="alert">ID Pemasok tidak valid.</div>';
     }
 
-    // Tutup statement untuk pemeriksaan pemasok
+    // Close statement for pemasok check
     mysqli_stmt_close($stmtCheckPemasok);
 }
-
 
 // Fetch pembelian data for the table
 $startDate = isset($_GET['start_date']) ? $_GET['start_date'] : '1970-01-01';
@@ -145,7 +127,6 @@ mysqli_stmt_bind_param($stmtPembelian, "ss", $startDate, $endDate);
 mysqli_stmt_execute($stmtPembelian);
 $pembelianResult = mysqli_stmt_get_result($stmtPembelian);
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -355,10 +336,10 @@ $pembelianResult = mysqli_stmt_get_result($stmtPembelian);
     </div>
 </div>
 <script>
-    document.getElementById('addRow').addEventListener('click', function () {
-        var table = document.getElementById('itemRows');
-        var row = table.insertRow();
-        row.innerHTML = `
+document.getElementById('addRow').addEventListener('click', function() {
+    var table = document.getElementById('itemRows');
+    var row = table.insertRow();
+    row.innerHTML = `
             <td><input type="text" name="total_pembelian[]" class="form-control" maxlength="5" required></td>
             <td>
                 <select name="kode_barang[]" class="form-control" required>
@@ -372,12 +353,35 @@ $pembelianResult = mysqli_stmt_get_result($stmtPembelian);
              <td><input type="text" name="harga_beli[]" class="form-control"  required></td>
             <td><button type="button" class="btn btn-danger remove-row">Hapus</button></td>
         `;
-    });
+});
 
-    document.addEventListener('click', function (e) {
-        if (e.target && e.target.classList.contains('remove-row')) {
-            e.target.closest('tr').remove();
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList.contains('remove-row')) {
+        e.target.closest('tr').remove();
+    }
+});
+
+
+
+$(document).ready(function() {
+    $('#product').change(function() {
+        var kodeBarang = $(this).val();
+        if (kodeBarang) {
+            $.ajax({
+                url: 'get_details.php',
+                type: 'POST',
+                data: {
+                    kode_barang: kodeBarang
+                },
+                success: function(response) {
+                    var data = JSON.parse(response);
+                    $('#harga_beli').val(data.harga_beli);
+                }
+            });
+        } else {
+            $('#harga_beli').val('');
         }
     });
+});
 </script>
 </html>

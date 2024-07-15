@@ -1,8 +1,27 @@
 <?php
 require 'function.php';
+
+// Fetching initial data for modal awal
 $barangQuery = "SELECT kode_barang, harga_beli, nama_barang FROM barang";
 $barangResult = mysqli_query($conn, $barangQuery);
 
+
+// ambil barang
+$jumlahbarangSUM = "SELECT SUM(jumlah_barang) AS total_jumlah_barang FROM barang";
+$jumlahbarangResult = mysqli_query($conn, $jumlahbarangSUM);
+$totalJumlahBarang = 0;
+
+if ($jumlahbarangResult) {
+    $row = mysqli_fetch_assoc($jumlahbarangResult);
+    $totalJumlahBarang = $row['total_jumlah_barang'];
+} else {
+    echo "Error: " . mysqli_error($conn);
+}
+$modalQuery = "SELECT SUM(jumlah_barang) AS total_jumlah, SUM(harga_beli) AS total_harga_beli, SUM(total_harga) AS total_harga FROM modal_awal";
+$modalResult = mysqli_query($conn, $modalQuery);
+$modalData = mysqli_fetch_assoc($modalResult);
+
+// Handling form submission to insert initial stock into kartu_persediaan
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $kode_barang = $_POST['kode_barang'];
     $stok_awal = $_POST['stok_awal'];
@@ -21,76 +40,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Mengambil data pembelian
-$pembelianQuery = "SELECT dp.kode_barang, dp.jumlah_pembelian, dp.harga_pembelian 
-                   FROM detail_pembelian dp
-                   JOIN pembelian p ON dp.kode_pembelian = p.kode_pembelian";
-$pembelianResult = mysqli_query($conn, $pembelianQuery);
+// Fetching data for the table based on kode_barang filter
+$kode_barang_filter = isset($_GET['kode_barang']) ? $_GET['kode_barang'] : '';
 
-// Mengambil data penjualan
-$penjualanQuery = "SELECT dp.kode_barang, dp.jumlah_penjualan, dp.harga_penjualan 
-                   FROM detail_penjualan dp
-                   JOIN penjualan p ON dp.kode_penjualan = p.kode_penjualan";
-$penjualanResult = mysqli_query($conn, $penjualanQuery);
-
-// Inisialisasi variabel untuk persediaan dan harga rata-rata
-$persediaan = [];
-$averagePrice = [];
-$totalStock = [];
-
-// Mengambil data kartu persediaan dari database
-$kartuQuery = "SELECT * FROM kartu_persediaan";
-$kartuResult = mysqli_query($conn, $kartuQuery);
-
-while ($row = mysqli_fetch_assoc($kartuResult)) {
-    $kode_barang = $row['kode_persediaan'];
-    $unit_masuk = $row['unit_masuk'];
-    $harga_masuk = $row['harga_masuk'];
-    $unit_keluar = $row['unit_keluar'];
-
-    if (!isset($persediaan[$kode_barang])) {
-        $persediaan[$kode_barang] = 0;
-        $averagePrice[$kode_barang] = 0;
-        $totalStock[$kode_barang] = 0;
-    }
-
-    $totalCost = $averagePrice[$kode_barang] * $persediaan[$kode_barang] + $harga_masuk * $unit_masuk;
-    $persediaan[$kode_barang] += $unit_masuk - $unit_keluar;
-    $totalStock[$kode_barang] += $unit_masuk - $unit_keluar;
-    $averagePrice[$kode_barang] = $totalCost / $totalStock[$kode_barang];
+$tableQuery = "SELECT kp.tanggal_persediaan, kp.kode_det_pembelian, kp.unit_masuk, kp.harga_masuk, kp.total_masuk, kp.unit_keluar, kp.harga_keluar, kp.total_keluar, kp.unit_persediaan, kp.harga_persediaan, kp.total_persediaan
+              FROM kartu_persediaan kp
+              JOIN detail_pembelian dp ON kp.kode_det_pembelian = dp.kode_det_pembelian";
+if (!empty($kode_barang_filter)) {
+    $tableQuery .= " WHERE dp.kode_barang = '$kode_barang_filter'";
 }
-
-// Memperbarui persediaan berdasarkan data pembelian
-while ($row = mysqli_fetch_assoc($pembelianResult)) {
-    $kode_barang = $row['kode_barang'];
-    $jumlah = $row['jumlah_pembelian'];
-    $harga_beli = $row['harga_pembelian'];
-
-    if (!isset($persediaan[$kode_barang])) {
-        $persediaan[$kode_barang] = 0;
-        $averagePrice[$kode_barang] = 0;
-    }
-
-    $totalCost = $averagePrice[$kode_barang] * $persediaan[$kode_barang] + $harga_beli * $jumlah;
-    $persediaan[$kode_barang] += $jumlah;
-    $averagePrice[$kode_barang] = $totalCost / $persediaan[$kode_barang];
-}
-
-// Memperbarui persediaan berdasarkan data penjualan
-while ($row = mysqli_fetch_assoc($penjualanResult)) {
-    $kode_barang = $row['kode_barang'];
-    $jumlah = $row['jumlah_penjualan'];
-    $harga_jual = $row['harga_penjualan'];
-
-    if (!isset($persediaan[$kode_barang])) {
-        $persediaan[$kode_barang] = 0;
-        $averagePrice[$kode_barang] = 0;
-    }
-
-    $persediaan[$kode_barang] -= $jumlah;
-}
+$tableResult = mysqli_query($conn, $tableQuery);
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -104,25 +64,7 @@ while ($row = mysqli_fetch_assoc($penjualanResult)) {
     <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
     <link href="css/styles.css" rel="stylesheet" />
     <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
-    <script>
-        // Menampilkan data modal awal pada tabel
-        window.onload = function() {
-            var modalAwalData = JSON.parse(localStorage.getItem("modalAwal")) || {};
-            var tableBody = document.querySelector("#datatablesSimple tbody");
-            var row = tableBody.insertRow();
-
-            row.insertCell().textContent = "Modal Awal";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = modalAwalData['<?php echo $kode_barang; ?>'].stok_awal;
-            row.insertCell().textContent = modalAwalData['<?php echo $kode_barang; ?>'].harga_awal;
-            row.insertCell().textContent = modalAwalData['<?php echo $kode_barang; ?>'].stok_awal * modalAwalData['<?php echo $kode_barang; ?>'].harga_awal;
-        };
-    </script>
+  
 </head>
 <body class="sb-nav-fixed">
     <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
@@ -174,86 +116,67 @@ while ($row = mysqli_fetch_assoc($penjualanResult)) {
                 <div class="container-fluid px-4">
                     <h1 class="mt-4">Laporan Penjualan</h1>
                     <div class="card mb-4">
-                        <div class="card-header">
-                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#myModal">
-                                + Tambah
-                            </button>
-                            <form method="POST">
-                                <div class="form-inline">
-                                    <label class="mr-2" for="kode_barang">Kode Barang:</label>
-                                    <select name="kode_barang" class="form-select" required>
-                                        <option value="">Pilih Barang</option>
-                                        <?php mysqli_data_seek($barangResult, 0); // reset cursor ?>
-                                        <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
-                                            <option value="<?= $row['kode_barang'] ?>"><?= $row['kode_barang'] ?> - <?= $row['nama_barang'] ?></option>
-                                        <?php } ?>
-                                    </select>
-                                    <label class="mr-2" for="stok_awal">Stok Awal:</label>
-                                    <input type="number" name="stok_awal" class="form-control" required>
-                                    <label class="mr-2" for="harga_awal">Harga Awal:</label>
-                                    <input type="number" name="harga_awal" class="form-control" required>
-                                    <button type="submit" class="btn btn-success">Simpan</button>
-                                </div>
-                            </form>
-                        </div>
+                       
                         <div class="card-body">
-                            <form method="GET" class="mb-4">
-                                <div class="form-inline">
-                                    <label class="mr-2" for="nama_barang">Nama Barang:</label>
-                                    <input type="text" name="nama_barang" class="form-control" required>
-                                    <button type="submit" class="btn btn-primary">Cari</button>
-                                </div>
-                            </form>
+                        <form method="GET" class="mb-4">
+    <div class="form-inline">
+        <select class="form-select" name="kode_barang" onchange="this.form.submit()">
+            <option value="">Semua</option>
+            <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
+                <?php $selected = ($_GET['kode_barang'] ?? '') == $row['kode_barang'] ? 'selected' : ''; ?>
+                <option value="<?php echo $row['kode_barang']; ?>" <?php echo $selected; ?>><?php echo $row['nama_barang']; ?></option>
+            <?php } ?>
+        </select>
+    </div>
+</form>
+
                             <table id="datatablesSimple" border="1">
-                            <thead>
-                                <tr>
-                                    <td rowspan="2">Tanggal</td>
-                                    <td rowspan="2">Keterangan</td>
-                                    <td colspan="3">Masuk</td>
-                                    <td colspan="3">Keluar</td>
-                                    <td colspan="3">Persediaan</td>
-                                </tr>
-                                <tr>
-                                    <td>Unit</td>
-                                    <td>Harga</td>
-                                    <td>Total</td>
-                                    <td>Unit</td>
-                                    <td>Harga</td>
-                                    <td>Total</td>
-                                    <td>Unit</td>
-                                    <td>Harga</td>
-                                    <td>Total</td>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            <tr>
-                                    <td>Modal Awal</td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td> <!--  isi dengan jumlah unit jika menggunakan filter nama barang--></td>
-                                    <td> <!--  isi dengan harga/unit jika menggunakan filter nama barang--></td>
-                                    <td> <!--  isi dengan total bayar --></td>
-                                </tr>
-                                <tr>
-                                    <td><!--  tanggal --></td>
-                                    <td><!--  keterangan --></td>
-                                    <td><!--  unit --></td>
-                                    <td><!--  harga --></td>
-                                    <td><!--  total --></td>
-                                    <td><!--  unit --></td>
-                                    <td><!--  harga --></td>
-                                    <td><!--  total --></td>
-                                    <td><!--  unit --></td>
-                                    <td><!--  harga --></td>
-                                    <td><!--  total --></td>
-                                </tr>
-                            </tbody>
-                            </table>
+    <thead>
+        <tr>
+            <th>Tanggal</th>
+            <th>Keterangan</th>
+            <th>Unit Masuk</th>
+            <th>Harga Masuk</th>
+            <th>Total Masuk</th>
+            <th>Unit Keluar</th>
+            <th>Harga Keluar</th>
+            <th>Total Keluar</th>
+            <th>Unit Persediaan</th>
+            <th>Harga Persediaan</th>
+            <th>Total Persediaan</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td></td>
+            <td><b>Modal Awal</b></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td><?php echo $modalData['total_jumlah']; ?></td>
+            <td><?php echo $modalData['total_harga_beli']; ?></td>
+            <td><?php echo $modalData['total_harga']; ?></td>
+        </tr>
+        <?php while ($row = mysqli_fetch_assoc($tableResult)) { ?>
+            <tr>
+                <td><?php echo $row['tanggal_persediaan']; ?></td>
+                <td><?php echo $row['kode_det_pembelian']; ?></td>
+                <td><?php echo $row['unit_masuk']; ?></td>
+                <td><?php echo $row['harga_masuk']; ?></td>
+                <td><?php echo $row['total_masuk']; ?></td>
+                <td><?php echo $row['unit_keluar']; ?></td>
+                <td><?php echo $row['harga_keluar']; ?></td>
+                <td><?php echo $row['total_keluar']; ?></td>
+                <td><?php echo $row['unit_persediaan']; ?></td>
+                <td><?php echo $row['harga_persediaan']; ?></td>
+                <td><?php echo $row['total_persediaan']; ?></td>
+            </tr>
+        <?php } ?>
+    </tbody>
+</table>
                             <div class="text-end mt-3">
                                 <button type="button" class="btn btn-success" onclick="print()">Cetak</button>
                             </div>
@@ -281,37 +204,8 @@ while ($row = mysqli_fetch_assoc($penjualanResult)) {
 
     <script>
         // Menampilkan data modal awal pada tabel
-        window.onload = function() {
-            var modalAwalData = JSON.parse(localStorage.getItem("modalAwal")) || {};
-            var tableBody = document.querySelector("#datatablesSimple tbody");
-            var row = tableBody.insertRow();
-
-            row.insertCell().textContent = "Modal Awal";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = "";
-            row.insertCell().textContent = modalAwalData['<?php echo $kode_barang; ?>'].stok_awal;
-            row.insertCell().textContent = modalAwalData['<?php echo $kode_barang; ?>'].harga_awal;
-            row.insertCell().textContent = modalAwalData['<?php echo $kode_barang; ?>'].stok_awal * modalAwalData['<?php echo $kode_barang; ?>'].harga_awal;
-
-            // Menampilkan data persediaan dari PHP
-            <?php foreach ($persediaan as $kode_barang => $unit) { ?>
-                var row = tableBody.insertRow();
-                row.insertCell().textContent = "<?php echo date('Y-m-d'); ?>";
-                row.insertCell().textContent = "Update Persediaan";
-                row.insertCell().textContent = "<?php echo $unit; ?>";
-                row.insertCell().textContent = "<?php echo number_format($averagePrice[$kode_barang], 2); ?>";
-                row.insertCell().textContent = "<?php echo number_format($averagePrice[$kode_barang] * $unit, 2); ?>";
-                row.insertCell().textContent = "";
-                row.insertCell().textContent = "";
-                row.insertCell().textContent = "<?php echo $unit; ?>";
-                row.insertCell().textContent = "<?php echo number_format($averagePrice[$kode_barang], 2); ?>";
-                row.insertCell().textContent = "<?php echo number_format($averagePrice[$kode_barang] * $unit, 2); ?>";
-            <?php } ?>
-        };
+        
+          
     </script>
 </body>
 </html>

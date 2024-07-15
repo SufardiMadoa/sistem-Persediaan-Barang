@@ -16,6 +16,19 @@ if (isset($_POST['tambah'])) {
 
     if (mysqli_query($conn, $query)) {
         echo '<script>alert("Data barang berhasil ditambahkan.");</script>';
+
+        // Hitung total_harga
+        $total_harga = $jumlah_barang * $harga_beli;
+
+        // Query SQL untuk memasukkan data ke dalam tabel modal_awal
+        $query_modal = "INSERT INTO modal_awal (kode_barang, jumlah_barang, harga_beli, total_harga)
+                        VALUES ('$kode_barang', '$jumlah_barang', '$harga_beli', '$total_harga')";
+        
+        if (mysqli_query($conn, $query_modal)) {
+            echo '<script>alert("Data modal awal berhasil ditambahkan.");</script>';
+        } else {
+            echo "Error: " . $query_modal . "<br>" . mysqli_error($conn);
+        }
     } else {
         echo "Error: " . $query . "<br>" . mysqli_error($conn);
     }
