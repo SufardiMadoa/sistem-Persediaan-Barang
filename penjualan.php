@@ -8,7 +8,7 @@ $query = "SELECT p.kode_penjualan, p.tgl_penjualan, p.total_penjualan, dp.kode_b
           JOIN barang b ON dp.kode_barang = b.kode_barang";
 $result = $conn->query($query); 
 
-$barangQuery = "SELECT kode_barang, harga_beli, nama_barang FROM barang";
+$barangQuery = "SELECT kode_barang, harga_beli, nama_barang, harga_jual FROM barang";
 $barangResult = mysqli_query($conn, $barangQuery);
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
@@ -265,20 +265,20 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                                 </tr>
                             </thead>
                             <tbody id="itemRows">
-                                <tr>
-                                    <td>
-                                        <select name="kode_barang[]" class="form-select" required>
-                                            <option value="">Pilih Barang</option>
-                                            <?php mysqli_data_seek($barangResult, 0); // reset cursor ?>
-                                            <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
-                                                <option value="<?= $row['kode_barang'] ?>"><?= $row['nama_barang'] ?></option>
-                                            <?php } ?>
-                                        </select>
-                                    </td>
-                                    <td><input type="number" name="harga_jual[]" class="form-control" required></td>
-                                    <td><input type="text" name="total_bayar[]" class="form-control total-bayar" readonly required></td>
-                                    <td><button type="button" class="btn btn-danger remove-row">Hapus</button></td>
-                                </tr>
+                            <tr>
+                                                    <td>
+                                                        <select name="kode_barang[]" class="form-select" required>
+                                                            <option value="">Pilih Barang</option>
+                                                            <?php mysqli_data_seek($barangResult, 0); // reset cursor ?>
+                                                            <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
+                                                                <option value="<?= $row['kode_barang'] ?>"><?= $row['nama_barang'] ?></option>
+                                                            <?php } ?>
+                                                        </select>
+                                                    </td>
+                                                    <td><input type="number" name="harga_jual[]" class="form-control harga-jual" required></td>
+                                                    <td><input type="text" name="total_bayar[]" class="form-control total-bayar" readonly required></td>
+                                                    <td><button type="button" class="btn btn-danger remove-row">Hapus</button></td>
+                                                </tr>
                             </tbody>
                         </table>
                         <button type="button" class="btn btn-success" id="addRow">Tambah Baris</button>
@@ -299,12 +299,39 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
             totalBayar.value = hargaJual * jumlahPenjualan;
         }
 
+        // document.addEventListener('input', function(e) {
+        //     if (e.target.classList.contains('harga-jual') || e.target.classList.contains('jumlah-penjualan')) {
+        //         const row = e.target.closest('tr');
+        //         calculateTotalBayar(row);
+        //     }
+        // });
         document.addEventListener('input', function(e) {
             if (e.target.classList.contains('harga-jual') || e.target.classList.contains('jumlah-penjualan')) {
                 const row = e.target.closest('tr');
                 calculateTotalBayar(row);
+                const totalPenjualanInput = document.getElementById('total_penjualan');
+                const totalBayarInputs = document.querySelectorAll('.total-bayar');
+                let totalPenjualan = 0;
+                totalBayarInputs.forEach(input => {
+                    totalPenjualan += parseFloat(input.value);
+                });
+                totalPenjualanInput.value = totalPenjualan;
             }
         });
+
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('remove-row')) {
+                e.target.closest('tr').remove();
+                const totalPenjualanInput = document.getElementById('total_penjualan');
+                const totalBayarInputs = document.querySelectorAll('.total-bayar');
+                let totalPenjualan = 0;
+                totalBayarInputs.forEach(input => {
+                    totalPenjualan += parseFloat(input.value);
+                });
+                totalPenjualanInput.value = totalPenjualan;
+            }
+        });
+
 
     document.getElementById('addRow').addEventListener('click', function () {
         var table = document.getElementById('itemRows');
