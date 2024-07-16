@@ -12,11 +12,6 @@ $barangQuery = "SELECT kode_barang, harga_beli, nama_barang, harga_jual FROM bar
 $barangResult = mysqli_query($conn, $barangQuery);
 
 
-$rowper = "SELECT total_persediaan FROM kartu_persediaan WHERE kode_persediaan = ?";
-$barangResult = mysqli_query($conn, $rowper);
-
-$unit_persediaan = $rowper['total_persediaan'];
-
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
     $kode_penjualan = $_POST['kode_penjualan'];
     $tgl_penjualan = $_POST['tgl_penjualan'];
@@ -87,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
             $stmt_kartu->fetch();
             $stmt_kartu->free_result();
 
-            // Calculate new stock and average price
+            
             $total_persediaan = $unit_persediaan - $total;
             $average_price = ($unit_persediaan * $harga_persediaan + $total_keluar) / ($unit_persediaan + $jumlah);
 
