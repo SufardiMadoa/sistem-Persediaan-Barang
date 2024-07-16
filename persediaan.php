@@ -5,7 +5,6 @@ require 'function.php';
 $barangQuery = "SELECT kode_barang, harga_beli, nama_barang FROM barang";
 $barangResult = mysqli_query($conn, $barangQuery);
 
-
 // ambil barang
 $jumlahbarangSUM = "SELECT SUM(jumlah_barang) AS total_jumlah_barang FROM barang";
 $jumlahbarangResult = mysqli_query($conn, $jumlahbarangSUM);
@@ -17,6 +16,7 @@ if ($jumlahbarangResult) {
 } else {
     echo "Error: " . mysqli_error($conn);
 }
+
 $modalQuery = "SELECT SUM(jumlah_barang) AS total_jumlah, SUM(harga_beli) AS total_harga_beli, SUM(total_harga) AS total_harga FROM modal_awal";
 $modalResult = mysqli_query($conn, $modalQuery);
 $modalData = mysqli_fetch_assoc($modalResult);
@@ -43,11 +43,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetching data for the table based on kode_barang filter
 $kode_barang_filter = isset($_GET['kode_barang']) ? $_GET['kode_barang'] : '';
 
-$tableQuery = "SELECT kp.tanggal_persediaan, kp.kode_det_pembelian, kp.unit_masuk, kp.harga_masuk, kp.total_masuk, kp.unit_keluar, kp.harga_keluar, kp.total_keluar, kp.unit_persediaan, kp.harga_persediaan, kp.total_persediaan
+$tableQuery = "SELECT kp.tanggal_persediaan, b.nama_barang, kp.unit_masuk, kp.harga_masuk, kp.total_masuk, kp.unit_keluar, kp.harga_keluar, kp.total_keluar, kp.unit_persediaan, kp.harga_persediaan, kp.total_persediaan
               FROM kartu_persediaan kp
-              JOIN detail_pembelian dp ON kp.kode_det_pembelian = dp.kode_det_pembelian";
+              LEFT JOIN detail_pembelian dp ON kp.kode_det_pembelian = dp.kode_det_pembelian
+              LEFT JOIN detail_penjualan dj ON kp.kode_det_penjualan = dj.kode_det_penjualan
+              LEFT JOIN barang b ON dp.kode_barang = b.kode_barang OR dj.kode_barang = b.kode_barang";
 if (!empty($kode_barang_filter)) {
-    $tableQuery .= " WHERE dp.kode_barang = '$kode_barang_filter'";
+    $tableQuery .= " WHERE b.kode_barang = '$kode_barang_filter'";
 }
 $tableResult = mysqli_query($conn, $tableQuery);
 ?>
@@ -120,7 +122,7 @@ $tableResult = mysqli_query($conn, $tableQuery);
                         <div class="card-body">
                         <form method="GET" class="mb-4">
     <div class="form-inline">
-        <select class="form-select" name="kode_barang" onchange="this.form.submit()">
+    <select class="form-select" name="kode_barang" onchange="this.form.submit()">
             <option value="">Semua</option>
             <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
                 <?php $selected = ($_GET['kode_barang'] ?? '') == $row['kode_barang'] ? 'selected' : ''; ?>
@@ -134,7 +136,7 @@ $tableResult = mysqli_query($conn, $tableQuery);
     <thead>
         <tr>
             <th>Tanggal</th>
-            <th>Keterangan</th>
+            <th>Nama Barang</th>
             <th>Unit Masuk</th>
             <th>Harga Masuk</th>
             <th>Total Masuk</th>
@@ -163,7 +165,7 @@ $tableResult = mysqli_query($conn, $tableQuery);
         <?php while ($row = mysqli_fetch_assoc($tableResult)) { ?>
             <tr>
                 <td><?php echo $row['tanggal_persediaan']; ?></td>
-                <td><?php echo $row['kode_det_pembelian']; ?></td>
+                <td><?php echo $row['nama_barang']; ?></td>
                 <td><?php echo $row['unit_masuk']; ?></td>
                 <td><?php echo $row['harga_masuk']; ?></td>
                 <td><?php echo $row['total_masuk']; ?></td>

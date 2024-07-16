@@ -11,6 +11,12 @@ $result = $conn->query($query);
 $barangQuery = "SELECT kode_barang, harga_beli, nama_barang, harga_jual FROM barang";
 $barangResult = mysqli_query($conn, $barangQuery);
 
+
+$rowper = "SELECT total_persediaan FROM kartu_persediaan WHERE kode_persediaan = ?";
+$barangResult = mysqli_query($conn, $rowper);
+
+$unit_persediaan = $rowper['total_persediaan'];
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
     $kode_penjualan = $_POST['kode_penjualan'];
     $tgl_penjualan = $_POST['tgl_penjualan'];
@@ -67,30 +73,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
             $stmt_detail->bind_param("sssii", $kode_det_penjualan, $kode_penjualan, $kode, $jumlah, $harga);
             $stmt_detail->execute();
 
-
-            
-
             $update_stock_query = "UPDATE barang SET jumlah_barang = jumlah_barang - ? WHERE kode_barang = ?";
             $stmt_update_stock = $conn->prepare($update_stock_query);
             $stmt_update_stock->bind_param("is", $jumlah, $kode);
             $stmt_update_stock->execute();
         }
-     
+        $query_kartu = "SELECT total_persediaan, harga_persediaan FROM kartu_persediaan WHERE kode_barang = ? ORDER BY tanggal_persediaan DESC LIMIT 1";
+        $stmt_kartu = $conn->prepare($query_kartu);
         foreach ($kode_barang as $i => $kode) {
+            $stmt_kartu->bind_param("s", $kode);
+            $stmt_kartu->execute();
+            $stmt_kartu->bind_result($unit_persediaan, $harga_persediaan);
+            $stmt_kartu->fetch();
+            $stmt_kartu->free_result();
+
+            // Calculate new stock and average price
+            $total_persediaan = $unit_persediaan - $total;
+            $average_price = ($unit_persediaan * $harga_persediaan + $total_keluar) / ($unit_persediaan + $jumlah);
+
+
             // Generate a unique kode_det_penjualan
             $kode_det_penjualan = $kode_penjualan . '-' . ($i + 1);
             $jumlah = $total;
             $harga = isset($harga_jual[$i]) ? $harga_jual[$i] : 0;
             
             $total_keluar = $jumlah * $harga; // Hitung total keluar
-            
+            $total_persediaan = $unit_persediaan - $total_keluar;
             // Insert into kartu_persediaan table
             $query_kartu = "
-                INSERT INTO kartu_persediaan (kode_persediaan, tanggal_persediaan, kode_det_penjualan, unit_keluar, harga_keluar, total_keluar)
+                INSERT INTO kartu_persediaan (kode_persediaan, tanggal_persediaan, kode_det_penjualan, unit_keluar, harga_keluar, total_keluar, unit_persediaan, harga_persediaan, total_persediaan )
                 VALUES (?, ?, ?, ?, ?, ?)
             ";
             $stmt_kartu = $conn->prepare($query_kartu);
-            $stmt_kartu->bind_param("sssssi", $kode_det_penjualan, $tgl_penjualan, $kode_det_penjualan, $jumlah, $harga, $total_keluar);
+            $stmt_kartu->bind_param("sssssi", $kode_det_penjualan, $tgl_penjualan, $kode_det_penjualan, $jumlah, $harga, $total_keluar, $unit_persediaan, $harga_persediaan, $total_persediaan);
             $stmt_kartu->execute();
         }
     

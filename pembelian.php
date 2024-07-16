@@ -1,6 +1,3 @@
-
-
-
 <?php
 require 'function.php';
 
@@ -50,52 +47,52 @@ if (isset($_POST['simpan'])) {
             mysqli_stmt_execute($stmtDetail);
             mysqli_stmt_close($stmtDetail);
 
+            // Fetch current data for the item from barang table
+            $fetchBarangQuery = "SELECT jumlah_barang, harga_beli FROM barang WHERE kode_barang = ?";
+            $stmtFetchBarang = mysqli_prepare($conn, $fetchBarangQuery);
+            mysqli_stmt_bind_param($stmtFetchBarang, "s", $kode_barang_item);
+            mysqli_stmt_execute($stmtFetchBarang);
+            $resultFetchBarang = mysqli_stmt_get_result($stmtFetchBarang);
+            $rowBarang = mysqli_fetch_assoc($resultFetchBarang);
+            mysqli_stmt_close($stmtFetchBarang);
 
+            $current_jumlah_barang = $rowBarang['jumlah_barang'];
+            $current_harga_beli = $rowBarang['harga_beli'];
+
+            // Calculate new stock and average price
+            $jumlah_barang_baru = $current_jumlah_barang + $total_pembelian_item;
+            $modal_awal = $current_jumlah_barang * $current_harga_beli;
+            $modal_pembelian = $total_pembelian_item * $harga_pembelian_item;
+            $modal_awal_baru = $modal_awal + $modal_pembelian;
+            $harga_rata_rata_baru = $modal_awal_baru / $jumlah_barang_baru;
+
+            // Update barang table with new average price
+            $updateBarangQuery = "UPDATE barang SET jumlah_barang = ?, harga_beli = ?, harga_jual = ? WHERE kode_barang = ?";
+            $stmtUpdateBarang = mysqli_prepare($conn, $updateBarangQuery);
+            mysqli_stmt_bind_param($stmtUpdateBarang, "iiis", $jumlah_barang_baru, $harga_rata_rata_baru, $harga_rata_rata_baru, $kode_barang_item);
+            mysqli_stmt_execute($stmtUpdateBarang);
+            mysqli_stmt_close($stmtUpdateBarang);
+
+            // Insert into kartu_persediaan table
             $kode_persediaan = $kode_pembelian . '-K-' . ($i + 1);
-            $insertKartu = "INSERT INTO kartu_persediaan (kode_persediaan, tanggal_persediaan, kode_det_pembelian, unit_masuk, harga_masuk, total_masuk) VALUES (?, ?, ?, ?, ?, ?)";
+            $insertKartu = "INSERT INTO kartu_persediaan (kode_persediaan, tanggal_persediaan, kode_det_pembelian, unit_masuk, harga_masuk, total_masuk, unit_persediaan, harga_persediaan, total_persediaan) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmtKartu = mysqli_prepare($conn, $insertKartu);
-            $total_masuk = $total_pembelian_item * $harga_pembelian_item;
-            mysqli_stmt_bind_param($stmtKartu, "sssiii", $kode_persediaan, $tgl_pembelian, $kode_det_pembelian, $total_pembelian_item, $harga_pembelian_item, $total_masuk);
+
+            // Calculate unit_persediaan, harga_persediaan, total_persediaan
+            $unit_masuk = $total_pembelian_item;
+            // $current_jumlah_barang;
+            $harga_persediaan = $harga_rata_rata_baru;
+            $harga_masuk = $harga_pembelian_item;
+            // $harga_rata_rata_baru;
+            
+            $total_persediaan  = $modal_awal_baru;
+            $unit_persediaan = $jumlah_barang_baru;
+            $total_masuk = $unit_masuk * $harga_masuk;
+
+            mysqli_stmt_bind_param($stmtKartu, "sssiiiiii", $kode_persediaan, $tgl_pembelian, $kode_det_pembelian, $unit_masuk, $harga_masuk, $total_masuk, $unit_persediaan, $harga_persediaan, $total_persediaan);
             mysqli_stmt_execute($stmtKartu);
             mysqli_stmt_close($stmtKartu);
-            // Update stock barang
-            // $updateStokQuery = "UPDATE barang SET jumlah_barang = jumlah_barang + ? WHERE kode_barang = ?";
-            // $stmtUpdateStok = mysqli_prepare($conn, $updateStokQuery);
-            // mysqli_stmt_bind_param($stmtUpdateStok, "is", $total_pembelian_item, $kode_barang_item);
-            // mysqli_stmt_execute($stmtUpdateStok);
-            // mysqli_stmt_close($stmtUpdateStok);
- // Fetch current data for the item from barang table
- $fetchBarangQuery = "SELECT jumlah_barang, harga_beli FROM barang WHERE kode_barang = ?";
- $stmtFetchBarang = mysqli_prepare($conn, $fetchBarangQuery);
- mysqli_stmt_bind_param($stmtFetchBarang, "s", $kode_barang_item);
- mysqli_stmt_execute($stmtFetchBarang);
- $resultFetchBarang = mysqli_stmt_get_result($stmtFetchBarang);
- $rowBarang = mysqli_fetch_assoc($resultFetchBarang);
- mysqli_stmt_close($stmtFetchBarang);
-
- $current_jumlah_barang = $rowBarang['jumlah_barang'];
- $current_harga_beli = $rowBarang['harga_beli'];
-
- // Calculate new stock and average price
- $jumlah_barang_baru = $current_jumlah_barang + $total_pembelian_item;
- $modal_awal = $current_jumlah_barang * $current_harga_beli;
- $modal_pembelian = $total_pembelian_item * $harga_pembelian_item;
- $modal_awal_baru = $modal_awal + $modal_pembelian;
- $harga_rata_rata_baru = $modal_awal_baru / $jumlah_barang_baru;
-
- // Update barang table with new average price
- $updateBarangQuery = "UPDATE barang SET jumlah_barang = ?, harga_beli = ?, harga_jual = ? WHERE kode_barang = ?";
- $stmtUpdateBarang = mysqli_prepare($conn, $updateBarangQuery);
- mysqli_stmt_bind_param($stmtUpdateBarang, "iiis", $jumlah_barang_baru, $harga_rata_rata_baru, $harga_rata_rata_baru, $kode_barang_item);
- mysqli_stmt_execute($stmtUpdateBarang);
- mysqli_stmt_close($stmtUpdateBarang);
-
-
-
-            // lakukan menghitung rata rata disini
-            // $totalbayar = $total_pembelian_item * $harga_pembelian_item;
-            // $modalawal = $modal+$totalbayar;
-            // $modaljual = "jumlah_barang" : $modalawal;
         }
 
         // Close statement for pembelian
