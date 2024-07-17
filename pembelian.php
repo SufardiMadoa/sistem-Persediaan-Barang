@@ -11,7 +11,7 @@ $barangResult = mysqli_query($conn, $barangQuery);
 
 // Handle form submission
 if (isset($_POST['simpan'])) {
-    $kode_pembelian = $_POST['kode_pembelian'];
+    $kode_pembelian= 'BL-' . date('YmdHis');
     $tgl_pembelian = $_POST['tgl_pembelian'];
     $id_pemasok = $_POST['id_pemasok'];
     $total_pembelian = $_POST['total_pembelian'];
@@ -69,7 +69,7 @@ if (isset($_POST['simpan'])) {
             // Update barang table with new average price
             $updateBarangQuery = "UPDATE barang SET jumlah_barang = ?, harga_beli = ?, harga_jual = ? WHERE kode_barang = ?";
             $stmtUpdateBarang = mysqli_prepare($conn, $updateBarangQuery);
-            mysqli_stmt_bind_param($stmtUpdateBarang, "iiis", $jumlah_barang_baru, $harga_rata_rata_baru, $harga_rata_rata_baru, $kode_barang_item);
+            mysqli_stmt_bind_param($stmtUpdateBarang, "iiis", $jumlah_barang_baru, $current_harga_beli, $harga_rata_rata_baru, $kode_barang_item);
             mysqli_stmt_execute($stmtUpdateBarang);
             mysqli_stmt_close($stmtUpdateBarang);
 
@@ -173,7 +173,7 @@ $pembelianResult = mysqli_stmt_get_result($stmtPembelian);
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Persediaan
                         </a>
-                        <a class="nav-link" href="#">
+                        <a class="nav-link" href="gudang.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Stok Gudang
                         </a>
@@ -279,7 +279,7 @@ $pembelianResult = mysqli_stmt_get_result($stmtPembelian);
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="kode_pembelian" class="form-label">Kode Pembelian</label>
-                        <input type="text" class="form-control" id="kode_pembelian" name="kode_pembelian" required>
+                        <input type="text" class="form-control" value="<?php echo 'BL-' . date('YmdHis'); ?>" id="kode_pembelian" name="kode_pembelian" required>
                     </div>
                     <div class="mb-3">
                         <label for="tgl_pembelian" class="form-label">Tanggal Pembelian</label>

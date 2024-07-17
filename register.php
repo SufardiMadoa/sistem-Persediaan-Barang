@@ -3,17 +3,35 @@ require 'config.php';
 
 if (isset($_POST['register'])) {
     $id_pengguna = mysqli_real_escape_string($conn, $_POST['id_pengguna']);
+    $nama_pengguna = mysqli_real_escape_string($conn, $_POST['nama_pengguna']);
+    $email = mysqli_real_escape_string($conn, $_POST['email']);
+    $jabatan = mysqli_real_escape_string($conn, $_POST['jabatan']);
     $password = mysqli_real_escape_string($conn, $_POST['password']);
     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-    // Simpan $hashed_password ke database
-    $query = "INSERT INTO pengguna (id_pengguna, password) VALUES ('$id_pengguna', '$hashed_password')";
-    if (mysqli_query($conn, $query)) {
-        echo "Registrasi berhasil!";
+    // Check if the email already exists
+    $check_email_query = "SELECT * FROM pengguna WHERE email = '$email'";
+    $result = mysqli_query($conn, $check_email_query);
+
+    if (mysqli_num_rows($result) > 0) {
+        echo "Email sudah terdaftar!";
     } else {
-        echo "Error: " . mysqli_error($conn);
+        // Insert the new user
+        $query = "INSERT INTO pengguna (id_pengguna, nama_pengguna, email, jabatan, password) VALUES (?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("sssss", $id_pengguna, $nama_pengguna, $email, $jabatan, $hashed_password);
+
+        if ($stmt->execute()) {
+            echo "Registrasi berhasil!";
+        } else {
+            echo "Error: " . mysqli_error($conn);
+        }
+
+        $stmt->close();
     }
 }
+
+$conn->close();
 ?>
 
 <!DOCTYPE html>

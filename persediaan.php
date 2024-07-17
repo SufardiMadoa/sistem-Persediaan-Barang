@@ -1,11 +1,11 @@
 <?php
 require 'function.php';
 
-// Fetching initial data for modal awal
+// Fetching initial data for the select dropdown
 $barangQuery = "SELECT kode_barang, harga_beli, nama_barang FROM barang";
 $barangResult = mysqli_query($conn, $barangQuery);
 
-// ambil barang
+// Fetching total jumlah barang
 $jumlahbarangSUM = "SELECT SUM(jumlah_barang) AS total_jumlah_barang FROM barang";
 $jumlahbarangResult = mysqli_query($conn, $jumlahbarangSUM);
 $totalJumlahBarang = 0;
@@ -16,10 +16,6 @@ if ($jumlahbarangResult) {
 } else {
     echo "Error: " . mysqli_error($conn);
 }
-
-$modalQuery = "SELECT SUM(jumlah_barang) AS total_jumlah, SUM(harga_beli) AS total_harga_beli, SUM(total_harga) AS total_harga FROM modal_awal";
-$modalResult = mysqli_query($conn, $modalQuery);
-$modalData = mysqli_fetch_assoc($modalResult);
 
 // Handling form submission to insert initial stock into kartu_persediaan
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -43,6 +39,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetching data for the table based on kode_barang filter
 $kode_barang_filter = isset($_GET['kode_barang']) ? $_GET['kode_barang'] : '';
 
+// Fetching modal awal data with filter
+$modalQuery = "SELECT SUM(jumlah_barang) AS total_jumlah, SUM(harga_beli) AS total_harga_beli, SUM(total_harga) AS total_harga FROM modal_awal";
+if (!empty($kode_barang_filter)) {
+    $modalQuery .= " WHERE kode_barang = '$kode_barang_filter'";
+}
+$modalResult = mysqli_query($conn, $modalQuery);
+$modalData = mysqli_fetch_assoc($modalResult);
+
+// Fetching table data with filter
 $tableQuery = "SELECT kp.tanggal_persediaan, b.nama_barang, kp.unit_masuk, kp.harga_masuk, kp.total_masuk, kp.unit_keluar, kp.harga_keluar, kp.total_keluar, kp.unit_persediaan, kp.harga_persediaan, kp.total_persediaan
               FROM kartu_persediaan kp
               LEFT JOIN detail_pembelian dp ON kp.kode_det_pembelian = dp.kode_det_pembelian
@@ -102,7 +107,7 @@ $tableResult = mysqli_query($conn, $tableQuery);
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Persediaan
                         </a>
-                        <a class="nav-link" href="index.html">
+                        <a class="nav-link" href="gudang.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Stok Gudang
                         </a>
@@ -116,13 +121,13 @@ $tableResult = mysqli_query($conn, $tableQuery);
         <div id="layoutSidenav_content">
             <main>
                 <div class="container-fluid px-4">
-                    <h1 class="mt-4">Laporan Penjualan</h1>
+                    <h1 class="mt-4">Kartu Persediaan</h1>
                     <div class="card mb-4">
                        
                         <div class="card-body">
                         <form method="GET" class="mb-4">
-    <div class="form-inline">
-    <select class="form-select" name="kode_barang" onchange="this.form.submit()">
+                <div class="form-inline">
+                <select class="form-select" name="kode_barang" onchange="this.form.submit()">
             <option value="">Semua</option>
             <?php while ($row = mysqli_fetch_assoc($barangResult)) { ?>
                 <?php $selected = ($_GET['kode_barang'] ?? '') == $row['kode_barang'] ? 'selected' : ''; ?>
@@ -132,7 +137,7 @@ $tableResult = mysqli_query($conn, $tableQuery);
     </div>
 </form>
 
-                            <table id="datatablesSimple" border="1">
+<table id="datatablesSimple" border="1">
     <thead>
         <tr>
             <th>Tanggal</th>

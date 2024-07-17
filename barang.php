@@ -3,16 +3,17 @@ require 'function.php';
 
 // Proses tambah barang
 if (isset($_POST['tambah'])) {
-    $kode_barang = mysqli_real_escape_string($conn, $_POST['kode_barang']);
+    $kode_barang = 'BRG-' . date('mds');
     $nama_barang = mysqli_real_escape_string($conn, $_POST['nama_barang']);
     $jumlah_barang = mysqli_real_escape_string($conn, $_POST['jumlah_barang']);
+    $jumlah_minimum = mysqli_real_escape_string($conn, $_POST['jumlah_minimum']);
     $harga_beli = mysqli_real_escape_string($conn, $_POST['harga_beli']);
     $harga_jual = mysqli_real_escape_string($conn, $_POST['harga_jual']);
     $keterangan = mysqli_real_escape_string($conn, $_POST['keterangan']);
 
     // Query SQL untuk memasukkan data ke dalam tabel barang
-    $query = "INSERT INTO barang (kode_barang, nama_barang, jumlah_barang, harga_beli, harga_jual, keterangan)
-              VALUES ('$kode_barang', '$nama_barang', '$jumlah_barang', '$harga_beli', '$harga_jual', '$keterangan')";
+    $query = "INSERT INTO barang (kode_barang, nama_barang, jumlah_barang, jumlah_minimum, harga_beli, harga_jual, keterangan)
+              VALUES ('$kode_barang', '$nama_barang', '$jumlah_barang', '$jumlah_minimum', '$harga_beli', '$harga_jual', '$keterangan')";
 
     if (mysqli_query($conn, $query)) {
         echo '<script>alert("Data barang berhasil ditambahkan.");</script>';
@@ -88,7 +89,7 @@ $result = mysqli_query($conn, $sql);
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Persediaan
                         </a>
-                        <a class="nav-link" href="#">
+                        <a class="nav-link" href="gudang.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Stok Gudang
                         </a>
@@ -198,7 +199,7 @@ window.addEventListener('DOMContentLoaded', event => {
                 <div class="modal-body" style="display: grid; grid-gap: 10px;">
                     <div>
                         <label for="kode_barang">Kode Barang</label>
-                        <input type="text" id="kode_barang" name="kode_barang" placeholder="Kode Barang" class="form-control" required>
+                        <input type="text" id="kode_barang" name="kode_barang" value="<?php echo 'BRG-' . date('mds'); ?>" class="form-control" readonly>
                     </div>
                     <div>
                         <label for="nama_barang">Nama Barang</label>
@@ -207,6 +208,10 @@ window.addEventListener('DOMContentLoaded', event => {
                     <div>
                         <label for="jumlah_barang">Jumlah Barang</label>
                         <input type="number" id="jumlah_barang" name="jumlah_barang" placeholder="Jumlah Barang" class="form-control" required>
+                    </div>
+                    <div>
+                        <label for="jumlah_minimum">Jumlah Barang Minimum</label>
+                        <input type="number" id="jumlah_minimum" name="jumlah_minimum" placeholder="jumlah minimum" class="form-control" required>
                     </div>
                     <div>
                         <label for="harga_beli">Harga Beli</label>

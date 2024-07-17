@@ -1,13 +1,13 @@
 <?php
 require 'config.php';  // Memasukkan file koneksi ke database
-
+check_login();
 // Fungsi untuk mengecek apakah pengguna sudah login
-function check_login() {
-    if (!isset($_SESSION['log'])) {
-        header('Location: login.php');
-        exit();
-    }
-}
+// function check_login() {
+//     if (!isset($_SESSION['log'])) {
+//         header('Location: login.php');
+//         exit();
+//     }
+// }
 
 // Fungsi untuk menyimpan data barang ke database
 function tambah_barang($kode_barang, $nama_barang, $jumlah_barang, $harga_beli, $harga_jual, $keterangan) {
@@ -47,6 +47,34 @@ function insertData($id_pengguna, $nama_pengguna, $email, $jabatan) {
 
     // Menutup koneksi
     $conn->close();
+}
+
+function getStokGudang($startDate, $endDate) {
+    global $conn; // pastikan koneksi database sudah diatur
+
+    // Query untuk mendapatkan stok terakhir pada rentang tanggal
+    $query = "SELECT b.nama_barang, kp.tanggal_persediaan, SUM(kp.unit_persediaan) AS total_persediaan
+              FROM barang b
+              JOIN kartu_persediaan kp ON b.kode_barang = kp.kode_det_pembelian OR b.kode_barang = kp.kode_det_penjualan
+              WHERE kp.tanggal_persediaan BETWEEN '$startDate' AND '$endDate'
+              GROUP BY b.nama_barang, kp.tanggal_persediaan
+              ORDER BY kp.tanggal_persediaan DESC";
+    
+    $result = mysqli_query($conn, $query);
+
+    $rows = [];
+    $no = 1;
+    while ($row = mysqli_fetch_assoc($result)) {
+        $rows[] = [
+            'no' => $no++,
+            'tanggal_stok' => $row['tanggal_persediaan'],
+            'nama_barang' => $row['nama_barang'],
+            'total_persediaan' => $row['total_persediaan'],
+            'jumlah_minimum' => 10, // contoh jumlah minimum
+        ];
+    }
+
+    return $rows;
 }
 
 ?>

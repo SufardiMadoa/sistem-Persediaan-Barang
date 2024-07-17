@@ -1,15 +1,28 @@
 <?php
 require 'function.php';
+
 $query = "SELECT * FROM penjualan";
 $result = $conn->query($query);
 $query = "SELECT p.kode_penjualan, p.tgl_penjualan, p.total_penjualan, dp.kode_barang, b.nama_barang, dp.harga_penjualan, dp.jumlah_penjualan 
           FROM penjualan p
           JOIN detail_penjualan dp ON p.kode_penjualan = dp.kode_penjualan
           JOIN barang b ON dp.kode_barang = b.kode_barang";
-$result = $conn->query($query); 
+$det_barang = $conn->query($query); 
 
 $barangQuery = "SELECT kode_barang, harga_beli, nama_barang, harga_jual FROM barang";
 $barangResult = mysqli_query($conn, $barangQuery);
+
+$sql = "SELECT kode_persediaan, total_persediaan FROM kartu_persediaan ORDER BY kode_persediaan DESC LIMIT 1";
+$result = $conn->query($sql);
+
+// Initialize total_persediaan variable
+$total_tersedia = 0;
+
+// Check if a result is returned
+if ($result->num_rows > 0) {
+    $row = $result->fetch_assoc();
+    $total_tersedia = $row['total_persediaan'];
+}
 
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
@@ -18,12 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
 
     $kode_barang = isset($_POST['kode_barang']) ? $_POST['kode_barang'] : [];
     $total_rows = count($kode_barang);
-    $total = $_POST['total_penjualan'];
+    $total = (int)$_POST['total_penjualan']; // Cast to int
     $total_penjualan = $total * $total_rows;
     
-    
     $harga_jual = isset($_POST['harga_jual']) ? $_POST['harga_jual'] : [];
-    // $jumlah_penjualan = isset($_POST['total_penjualan']) ? $_POST['total_penjualan'] : [];
     $total_bayar = isset($_POST['total_bayar']) ? $_POST['total_bayar'] : [];
 
     $total_bayar = !empty($total_bayar) ? array_sum($total_bayar) : 0; // Calculate total bayar for all items
@@ -68,40 +79,50 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
             $stmt_detail->bind_param("sssii", $kode_det_penjualan, $kode_penjualan, $kode, $jumlah, $harga);
             $stmt_detail->execute();
 
+            // Update barang stock
             $update_stock_query = "UPDATE barang SET jumlah_barang = jumlah_barang - ? WHERE kode_barang = ?";
             $stmt_update_stock = $conn->prepare($update_stock_query);
             $stmt_update_stock->bind_param("is", $jumlah, $kode);
             $stmt_update_stock->execute();
         }
-        $query_kartu = "SELECT total_persediaan, harga_persediaan FROM kartu_persediaan WHERE kode_barang = ? ORDER BY tanggal_persediaan DESC LIMIT 1";
-        $stmt_kartu = $conn->prepare($query_kartu);
+
         foreach ($kode_barang as $i => $kode) {
-            $stmt_kartu->bind_param("s", $kode);
-            $stmt_kartu->execute();
-            $stmt_kartu->bind_result($unit_persediaan, $harga_persediaan);
-            $stmt_kartu->fetch();
-            $stmt_kartu->free_result();
+            // Fetch current data for the item from barang table
+            $fetchBarangQuery = "SELECT jumlah_barang, harga_beli FROM barang WHERE kode_barang = ?";
+            $stmtFetchBarang = $conn->prepare($fetchBarangQuery);
+            $stmtFetchBarang->bind_param("s", $kode);
+            $stmtFetchBarang->execute();
+            $resultFetchBarang = $stmtFetchBarang->get_result();
+            $rowBarang = $resultFetchBarang->fetch_assoc();
+            $stmtFetchBarang->close();
 
-            
-            $total_persediaan = $unit_persediaan - $total;
-            $average_price = ($unit_persediaan * $harga_persediaan + $total_keluar) / ($unit_persediaan + $jumlah);
-
+            $current_jumlah_barang = $rowBarang['jumlah_barang'];
+            $current_harga_beli = $rowBarang['harga_beli'];
 
             // Generate a unique kode_det_penjualan
             $kode_det_penjualan = $kode_penjualan . '-' . ($i + 1);
             $jumlah = $total;
             $harga = isset($harga_jual[$i]) ? $harga_jual[$i] : 0;
-            
             $total_keluar = $jumlah * $harga; // Hitung total keluar
-            $total_persediaan = $unit_persediaan - $total_keluar;
+            
             // Insert into kartu_persediaan table
-            $query_kartu = "
-                INSERT INTO kartu_persediaan (kode_persediaan, tanggal_persediaan, kode_det_penjualan, unit_keluar, harga_keluar, total_keluar, unit_persediaan, harga_persediaan, total_persediaan )
-                VALUES (?, ?, ?, ?, ?, ?)
-            ";
-            $stmt_kartu = $conn->prepare($query_kartu);
-            $stmt_kartu->bind_param("sssssi", $kode_det_penjualan, $tgl_penjualan, $kode_det_penjualan, $jumlah, $harga, $total_keluar, $unit_persediaan, $harga_persediaan, $total_persediaan);
-            $stmt_kartu->execute();
+            $kode_persediaan = $kode_penjualan . '-K-' . ($i + 1);
+            $insertKartu = "INSERT INTO kartu_persediaan (kode_persediaan, tanggal_persediaan, kode_det_penjualan, unit_keluar, harga_keluar, total_keluar, unit_persediaan, harga_persediaan, total_persediaan) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmtKartu = $conn->prepare($insertKartu);
+    
+            // Calculate unit_persediaan, harga_persediaan, total_persediaan
+            $unit_keluar = $jumlah;
+            $harga_keluar = $harga;
+            $total_keluar = $unit_keluar * $harga_keluar;
+            $unit_persediaan = $current_jumlah_barang ;
+            $harga_persediaan = $harga_keluar;
+            
+            $total_persediaan = $total_tersedia - $total_keluar;
+    
+            $stmtKartu->bind_param("sssiiiiii", $kode_persediaan, $tgl_penjualan, $kode_det_penjualan, $unit_keluar, $harga_keluar, $total_keluar, $unit_persediaan, $harga_persediaan, $total_persediaan);
+            $stmtKartu->execute();
+            $stmtKartu->close();
         }
     
         // Commit transaction
@@ -116,6 +137,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['simpan'])) {
         throw $exception;
     }
 }
+
+
 // Fetch pembelian data for the table
 $startDate = isset($_GET['start_date']) ? $_GET['start_date'] : '1970-01-01';
 $endDate = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
@@ -181,7 +204,7 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Persediaan
                         </a>
-                        <a class="nav-link" href="index.html">
+                        <a class="nav-link" href="gudang.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Stok Gudang
                         </a>
@@ -228,7 +251,7 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                                     </tr>
                                 </thead>
                                 <tbody>
-                                <?php while ($row = $result->fetch_assoc()) { ?>
+                                <?php while ($row = $det_barang->fetch_assoc()) { ?>
                                     <tr>
                                         <td><?php echo $row['kode_penjualan']; ?></td>
                                         <td><?php echo $row['tgl_penjualan']; ?></td>
@@ -276,7 +299,7 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
                 <form method="post">
                     <div class="mb-3">
                         <label for="kode_pembelian" class="form-label">Kode Penjualan</label>
-                        <input type="text" class="form-control" id="kode_pembelian" name="kode_penjualan" required>
+                        <input type="text" class="form-control" id="kode_pembelian" value="<?php echo 'JL-' . date('YmdHis'); ?>" name="kode_penjualan" readonly required>
                     </div>
                     <div class="mb-3">
                         <label for="tgl_pembelian" class="form-label">Tanggal Penjualan</label>
@@ -307,7 +330,7 @@ $pembelianResult = mysqli_stmt_get_result($stmt);
             </select>
         </td>
         <td><input type="number" name="harga_jual[]" class="form-control" readonly></td>
-        <td><input type="number" name="total_bayar[]" class="form-control" readonly></td>
+        <td><input type="number" name="total_bayar[]" class="form-control" onchange=""></td>
         <td><button type="button" class="btn btn-success" onclick="removeRow(this)">Hapus</button></td>
     </tr>
 </tbody>
@@ -335,7 +358,7 @@ function updateHargaJual(selectElement) {
 function calculateTotalBayar(inputElement) {
     var row = inputElement.closest('tr');
     var hargaJual = parseFloat(row.querySelector('select[name="kode_barang[]"]').selectedOptions[0].getAttribute('data-harga_jual'));
-    var jumlahPenjualan = parseFloat(row.querySelector('input[name="jumlah_penjualan[]"]').value) || 0;
+    var jumlahPenjualan = parseFloat(row.querySelector('input[name="total_penjualan[]"]').value) || 0;
     var totalBayar = hargaJual * jumlahPenjualan;
     row.querySelector('input[name="total_bayar[]"]').value = totalBayar.toFixed(2);
     calculateTotalPenjualan(); // Hitung kembali total penjualan setelah mengubah jumlah penjualan
@@ -357,7 +380,7 @@ function calculateTotalPenjualan() {
 }
 
 // Event listener untuk input jumlah penjualan
-$(document).on('input', 'input[name="jumlah_penjualan[]"]', function() {
+$(document).on('input', 'input[name="total_penjualan[]"]', function() {
     calculateTotalBayar(this); // Panggil fungsi calculateTotalBayar saat nilai input berubah
 });
 

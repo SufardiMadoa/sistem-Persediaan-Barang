@@ -1,37 +1,32 @@
 <?php
 session_start();
-require 'config.php';
+require 'config.php'; // include your database connection
 
 $message = '';
 
 if (isset($_POST['login'])) {
-    $id_pengguna = mysqli_real_escape_string($conn, $_POST['id_pengguna']);
-    $password = mysqli_real_escape_string($conn, $_POST['password']);
+    $id_pengguna = $_POST['id_pengguna'];
+    $password = $_POST['password'];
 
-    if (!empty($id_pengguna) && !empty($password)) {
-        $query = "SELECT * FROM pengguna WHERE id_pengguna='$id_pengguna'";
-        $result = mysqli_query($conn, $query);
+    $query = "SELECT * FROM pengguna WHERE id_pengguna = ?";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param('s', $id_pengguna);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-        if ($result) {
-            if (mysqli_num_rows($result) > 0) {
-                $user = mysqli_fetch_assoc($result);
-                // Memeriksa password dengan password_verify
-                if (password_verify($password, $user['password'])) {
-                    $_SESSION['log'] = 'true';  // Set session login
-                    header('Location: index.php');  // Redirect ke halaman setelah login sukses
-                    exit();
-                } else {
-                    $message = 'Password salah. Silakan coba lagi.';
-                }
-            } else {
-                $message = 'Akun Anda belum terdaftar.';
-            }
+    if ($result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        if (password_verify($password, $user['password'])) {
+            $_SESSION['id_pengguna'] = $user['id_pengguna'];
+            $_SESSION['nama_pengguna'] = $user['nama_pengguna'];
+            $_SESSION['jabatan'] = $user['jabatan'];
+            header("Location: index.php");
+            exit;
         } else {
-            $message = 'Error dalam melakukan query. Silakan coba lagi.';
-            echo mysqli_error($conn);  // Tampilkan pesan error MySQL untuk debugging
+            $message = "Password is incorrect.";
         }
     } else {
-        $message = 'ID Pengguna dan Password harus diisi.';
+        $message = "ID Pengguna is incorrect.";
     }
 }
 ?>
@@ -98,7 +93,7 @@ if (isset($_POST['login'])) {
     </style>
 </head>
 <body>
-    <div class="login-container">
+<div class="login-container">
         <h1>WELCOME!</h1>
         <h2>'UD GUSNIAR KAYU'</h2>
         <form method="post">

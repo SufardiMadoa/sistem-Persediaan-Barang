@@ -7,18 +7,29 @@ if (isset($_POST['tambah'])) {
     $email = mysqli_real_escape_string($conn, $_POST['email']);
     $jabatan = mysqli_real_escape_string($conn, $_POST['jabatan']);
     $password = mysqli_real_escape_string($conn, $_POST['password']);
+    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-    // Query SQL untuk memasukkan data ke dalam tabel barang
-    $query = "INSERT INTO pengguna (id_pengguna, nama_pengguna, email, jabatan, password)
-              VALUES ('$id_pengguna', '$nama_pengguna', '$email', '$jabatan', '$password')";
-
-    if (mysqli_query($conn, $query)) {
-        echo '<script>alert("Data barang berhasil ditambahkan.");</script>';
+    // Hash password
+    $check_email_query = "SELECT * FROM pengguna WHERE email = '$email'";
+    $result = mysqli_query($conn, $check_email_query);
+    if (mysqli_num_rows($result) > 0) {
+        echo "Email sudah terdaftar!";
     } else {
-        echo "Error: " . $query . "<br>" . mysqli_error($conn);
-    }
-}
+        // Insert the new user
+        $query = "INSERT INTO pengguna (id_pengguna, nama_pengguna, email, jabatan, password) VALUES (?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("sssss", $id_pengguna, $nama_pengguna, $email, $jabatan, $hashed_password);
 
+        if ($stmt->execute()) {
+            echo "Registrasi berhasil!";
+        } else {
+            echo "Error: " . mysqli_error($conn);
+        }
+
+        $stmt->close();
+    }
+   
+}
 // Ambil data pengguna dari database untuk ditampilkan
 $sql = "SELECT * FROM pengguna";
 $result = mysqli_query($conn, $sql);
@@ -72,7 +83,7 @@ $result = mysqli_query($conn, $sql);
                                 <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                                 Kartu Persediaan
                             </a>
-                            <a class="nav-link" href="index.html">
+                            <a class="nav-link" href="gudang.php">
                                 <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                                 Kartu Stok Gudang
                             </a>
@@ -189,6 +200,11 @@ $result = mysqli_query($conn, $sql);
         <div style="margin-bottom: 10px;">
             <label for="jabatan">Jabatan</label>
             <input type="text" id="jabatan" name="jabatan" placeholder="Jabatan" class="form-control" required>
+        </div>
+        <div>
+            <label for="password">Password:</label>
+            <input type="password" id="password" class="form-control" name="password" required><br>
+
         </div>
         <div style="text-align: center;">
             <button type="submit" class="btn btn-primary" name="tambah">Tambah</button>

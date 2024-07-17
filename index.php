@@ -1,5 +1,6 @@
 <?php
 require 'function.php';
+check_login();
 ?>
 
 <!DOCTYPE html>

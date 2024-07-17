@@ -3,7 +3,7 @@ require 'function.php';
 
 // Proses tambah pemasok
 if (isset($_POST['tambah'])) {
-    $id_pemasok = mysqli_real_escape_string($conn, $_POST['id_pemasok']);
+    $id_pemasok = 'ID-' . date('mdHis');
     $nama_pemasok = mysqli_real_escape_string($conn, $_POST['nama_pemasok']);
     $alamat_pemasok = mysqli_real_escape_string($conn, $_POST['alamat_pemasok']);
     $no_telp = mysqli_real_escape_string($conn, $_POST['no_telp']);
@@ -72,7 +72,7 @@ $result = mysqli_query($conn, $sql);
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Persediaan
                         </a>
-                        <a class="nav-link" href="index.html">
+                        <a class="nav-link" href="gudang.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
                             Kartu Stok Gudang
                         </a>
@@ -160,7 +160,7 @@ $result = mysqli_query($conn, $sql);
                 <div class="modal-body" style="display: grid; grid-gap: 10px;">
                     <div>
                         <label for="id_pemasok">ID Pemasok</label>
-                        <input type="text" id="id_pemasok" name="id_pemasok" placeholder="ID Pemasok" class="form-control" required>
+                        <input type="text" id="id_pemasok" name="id_pemasok" value="<?php echo 'ID-' . date('mdHis'); ?>" class="form-control" readonly>
                     </div>
                     <div>
                         <label for="nama_pemasok">Nama Pemasok</label>
